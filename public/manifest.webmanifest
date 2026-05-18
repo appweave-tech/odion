@@ -1,0 +1,12 @@
+{
+  "name": "Odion · Community Ops",
+  "short_name": "Odion",
+  "description": "Community tools for Odion The Woods of East — by Appweave.",
+  "start_url": "/garbage",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "icons": []
+}
