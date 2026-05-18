@@ -15,16 +15,6 @@ Built by [Appweave](https://appweave.tech) as a community-visibility play. PRD l
 - Tailwind v3 + Radix primitives (no full shadcn install — slim hand-rolled)
 - Vercel hosting + cron
 
-## Credentials
-
-This repo **never holds credentials**. Source them from:
-
-| Cred | Canonical location |
-| --- | --- |
-| `DATABASE_URL` | `~/work/appweave/ops-suite/apps/portal/.env.local` or `~/work/appweave/ai-delivery-hub/.env.local` |
-| `ADMIN_PASSCODE` | Generated at scaffold — `odion-skip-7Q4nW9kR2x`. Rotate via Vercel env. |
-| `CRON_SECRET` | Generated — `odion-cron-2k7xR9mPqL4nWvBz`. Set in Vercel env. |
-
 Copy into `.env.local` for local dev. **Never commit.**
 
 ## Setup
