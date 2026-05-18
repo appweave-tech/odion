@@ -34,7 +34,9 @@ export default async function TodayPage() {
 
       <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-2">WhatsApp message</h2>
-        <CopyWhatsApp text={digest.text} />
+        <div className="[&_pre]:font-mono">
+          <CopyWhatsApp text={digest.text} />
+        </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
           Auto-refreshes every minute. Final digest is generated at 20:00 IST.
         </p>
