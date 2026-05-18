@@ -34,19 +34,6 @@ export function LiveIssuesList({ items }: { items: LiveIssue[] }) {
                 {hoursAgo < 24 ? `${hoursAgo}h ago` : `${Math.round(hoursAgo / 24)}d ago`}
               </span>
             </div>
-            {it.sample_bodies.length > 0 && (
-              <ul className="mt-2 grid gap-1.5">
-                {it.sample_bodies.map((b, i) => (
-                  <li
-                    key={i}
-                    className="text-xs text-muted-foreground border-l-2 pl-2 line-clamp-2"
-                    style={{ borderColor: (it.color ?? '#94a3b8') + '80' }}
-                  >
-                    {b.replace(/\s+/g, ' ').trim()}
-                  </li>
-                ))}
-              </ul>
-            )}
           </li>
         );
       })}
