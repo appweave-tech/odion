@@ -2,18 +2,25 @@
 
 import { sql } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
-import { headers } from 'next/headers';
+import { cookies } from 'next/headers';
+import { getClientMeta } from '@/lib/request';
 import { todayIST, daysAgoIST } from '@/lib/utils';
 import type { SkipEventWithVilla } from '@/lib/types';
 
-function getClientMeta() {
-  const h = headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0].trim() ||
-    h.get('x-real-ip') ||
-    null;
-  const ua = h.get('user-agent') || null;
-  return { ip, ua };
+function requireDeviceCookie(): string {
+  const id = cookies().get('odion-device')?.value;
+  if (!id) throw new Error('Device cookie missing — reload the page');
+  return id;
+}
+
+// Trust-boundary gate: a device can only mark/unmark its own claimed villa.
+async function assertDeviceOwnsVilla(deviceId: string, villaId: string) {
+  const rows = await sql()<{ villa_id: string | null }[]>`
+    SELECT villa_id FROM odion.devices WHERE id = ${deviceId} LIMIT 1
+  `;
+  if (rows.length === 0 || rows[0].villa_id !== villaId) {
+    throw new Error('Device not claimed for this villa — pick your villa first');
+  }
 }
 
 const EDIT_WINDOW_DAYS = 7;
@@ -25,51 +32,66 @@ export type CurrentSkipForVilla = {
 
 export async function markSkip(input: {
   villaId: string;
-  deviceId: string;
   date?: string;
   note?: string;
 }) {
-  const { villaId, deviceId } = input;
+  const { villaId } = input;
+  const deviceId = requireDeviceCookie();
   const date = input.date ?? todayIST();
-  if (!villaId || !deviceId) throw new Error('villaId and deviceId required');
+  if (!villaId) throw new Error('villaId required');
+  if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
+    throw new Error('Edit window exceeded — ask admin');
+  }
+  await assertDeviceOwnsVilla(deviceId, villaId);
 
   const { ip, ua } = getClientMeta();
 
-  await sql().begin(async (tx) => {
-    const existing = await tx<{ id: string; void: boolean }[]>`
-      SELECT e.id, e.void
-      FROM odion.garbage_skip_events_current e
-      WHERE e.villa_id = ${villaId} AND e.skip_date = ${date}
-      LIMIT 1
-    `;
-    if (existing.length > 0 && !existing[0].void) return; // idempotent
+  try {
+    await sql().begin(async (tx) => {
+      const existing = await tx<{ id: string; void: boolean }[]>`
+        SELECT e.id, e.void
+        FROM odion.garbage_skip_events_current e
+        WHERE e.villa_id = ${villaId} AND e.skip_date = ${date}
+        LIMIT 1
+      `;
+      if (existing.length > 0 && !existing[0].void) return; // idempotent
 
-    if (existing.length > 0 && existing[0].void) {
+      if (existing.length > 0 && existing[0].void) {
+        await tx`
+          INSERT INTO odion.garbage_skip_events
+            (villa_id, skip_date, reported_by_device, supersedes_event_id, void, note, ip_address, user_agent)
+          VALUES (${villaId}, ${date}, ${deviceId}, ${existing[0].id}, false, ${input.note ?? null}, ${ip}, ${ua})
+        `;
+      } else {
+        await tx`
+          INSERT INTO odion.garbage_skip_events
+            (villa_id, skip_date, reported_by_device, void, note, ip_address, user_agent)
+          VALUES (${villaId}, ${date}, ${deviceId}, false, ${input.note ?? null}, ${ip}, ${ua})
+        `;
+      }
       await tx`
-        INSERT INTO odion.garbage_skip_events
-          (villa_id, skip_date, reported_by_device, supersedes_event_id, void, note, ip_address, user_agent)
-        VALUES (${villaId}, ${date}, ${deviceId}, ${existing[0].id}, false, ${input.note ?? null}, ${ip}, ${ua})
+        UPDATE odion.devices SET last_ip = ${ip}, user_agent = COALESCE(${ua}, user_agent), last_seen = now()
+        WHERE id = ${deviceId}
       `;
-    } else {
-      await tx`
-        INSERT INTO odion.garbage_skip_events
-          (villa_id, skip_date, reported_by_device, void, note, ip_address, user_agent)
-        VALUES (${villaId}, ${date}, ${deviceId}, false, ${input.note ?? null}, ${ip}, ${ua})
-      `;
-    }
-    await tx`
-      UPDATE odion.devices SET last_ip = ${ip}, user_agent = COALESCE(${ua}, user_agent), last_seen = now()
-      WHERE id = ${deviceId}
-    `;
-  });
+    });
+  } catch (e: unknown) {
+    // gse_active_uniq violation = a parallel call already wrote this same mark. Treat as success.
+    const code = (e as { code?: string } | null)?.code;
+    if (code !== '23505') throw e;
+  }
   revalidatePath('/garbage');
   revalidatePath('/garbage/today');
   revalidatePath('/garbage/history');
 }
 
-export async function unmarkSkip(input: { villaId: string; deviceId: string; date: string }) {
-  const { villaId, deviceId, date } = input;
-  if (!villaId || !deviceId || !date) throw new Error('villaId, deviceId, date required');
+export async function unmarkSkip(input: { villaId: string; date: string }) {
+  const { villaId, date } = input;
+  const deviceId = requireDeviceCookie();
+  if (!villaId || !date) throw new Error('villaId, date required');
+  if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
+    throw new Error('Edit window exceeded — ask admin');
+  }
+  await assertDeviceOwnsVilla(deviceId, villaId);
 
   const existing = await sql()<{ id: string }[]>`
     SELECT id FROM odion.garbage_skip_events_current

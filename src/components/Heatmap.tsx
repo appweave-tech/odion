@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, daysAgoIST } from '@/lib/utils';
 
 export function Heatmap({
   byDate,
@@ -12,12 +12,10 @@ export function Heatmap({
   days?: number;
   max?: number;
 }) {
-  const today = new Date();
+  // Use IST date keys so we line up with skip_date stored in IST.
   const cells: { date: string; count: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = daysAgoIST(i);
     cells.push({ date: key, count: byDate[key] ?? 0 });
   }
   const peak = max ?? Math.max(1, ...cells.map((c) => c.count));

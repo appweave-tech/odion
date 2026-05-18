@@ -1,10 +1,17 @@
 'use server';
 
 import { sql } from '@/lib/db';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { getClientMeta } from '@/lib/request';
 import type { Villa } from '@/lib/types';
 
 const PHASE_ORDER = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'NGC'];
+const VILLA_COLS = `id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at`;
+
+// Rate limit on auto-created villas — per device, per 24h.
+// Tunable: bump if community has a real onboarding burst.
+const AUTOCREATE_PER_DEVICE_DAILY = 5;
 
 function phaseRank(p: string): number {
   const i = PHASE_ORDER.indexOf(p);
@@ -13,7 +20,21 @@ function phaseRank(p: string): number {
 
 export async function listVillas(): Promise<Villa[]> {
   const rows = await sql()<Villa[]>`
-    SELECT id, phase, number, label, display_order, auto_created, verified, created_at
+    SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
+    FROM odion.villas
+    WHERE deleted_at IS NULL
+    ORDER BY phase, number
+  `;
+  return [...rows].sort((a, b) => {
+    const r = phaseRank(a.phase) - phaseRank(b.phase);
+    return r !== 0 ? r : a.number - b.number;
+  });
+}
+
+// Admin-only: includes soft-deleted villas so they can be restored.
+export async function listVillasIncludingDeleted(): Promise<Villa[]> {
+  const rows = await sql()<Villa[]>`
+    SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
     FROM odion.villas
     ORDER BY phase, number
   `;
@@ -27,6 +48,7 @@ export async function listPhases(): Promise<{ phase: string; count: number }[]> 
   const rows = await sql()<{ phase: string; count: string }[]>`
     SELECT phase, COUNT(*) AS count
     FROM odion.villas
+    WHERE deleted_at IS NULL
     GROUP BY phase
     ORDER BY phase
   `;
@@ -37,9 +59,9 @@ export async function listPhases(): Promise<{ phase: string; count: number }[]> 
 
 export async function listVillasInPhase(phase: string): Promise<Villa[]> {
   const rows = await sql()<Villa[]>`
-    SELECT id, phase, number, label, display_order, auto_created, verified, created_at
+    SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
     FROM odion.villas
-    WHERE phase = ${phase}
+    WHERE phase = ${phase} AND deleted_at IS NULL
     ORDER BY number
   `;
   return rows;
@@ -51,19 +73,49 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
   if (!phase || !Number.isFinite(number) || number <= 0) {
     throw new Error('Invalid phase or number');
   }
+  if (phase.length > 8 || number > 9999) {
+    throw new Error('Invalid phase or number');
+  }
 
+  // Look for existing villa (including soft-deleted — we'll restore those).
   const existing = await sql()<Villa[]>`
-    SELECT id, phase, number, label, display_order, auto_created, verified, created_at
+    SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
     FROM odion.villas
     WHERE phase = ${phase} AND number = ${number}
     LIMIT 1
   `;
-  if (existing.length > 0) return existing[0];
+  if (existing.length > 0) {
+    const villa = existing[0];
+    if (villa.deleted_at) {
+      await sql()`UPDATE odion.villas SET deleted_at = NULL WHERE id = ${villa.id}`;
+      revalidatePath('/garbage/admin/villas');
+      return { ...villa, deleted_at: null };
+    }
+    return villa;
+  }
 
+  // Rate limit per device — protects the pending-villa queue from spam.
+  const deviceId = cookies().get('odion-device')?.value || null;
+  if (deviceId) {
+    const [row] = await sql()<{ recent: string }[]>`
+      SELECT COUNT(*)::text AS recent
+      FROM odion.villas
+      WHERE auto_created = true
+        AND created_by_device = ${deviceId}
+        AND created_at > now() - interval '24 hours'
+    `;
+    if (Number(row.recent) >= AUTOCREATE_PER_DEVICE_DAILY) {
+      throw new Error(
+        `Too many new villas added from this device today (limit ${AUTOCREATE_PER_DEVICE_DAILY}). Ask an admin.`,
+      );
+    }
+  }
+
+  const { ip } = getClientMeta();
   const inserted = await sql()<Villa[]>`
-    INSERT INTO odion.villas (phase, number, auto_created, verified)
-    VALUES (${phase}, ${number}, true, false)
-    RETURNING id, phase, number, label, display_order, auto_created, verified, created_at
+    INSERT INTO odion.villas (phase, number, auto_created, verified, created_by_ip, created_by_device)
+    VALUES (${phase}, ${number}, true, false, ${ip}, ${deviceId})
+    RETURNING id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
   `;
   revalidatePath('/garbage');
   revalidatePath('/garbage/admin/villas');
@@ -71,18 +123,22 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
 }
 
 export async function claimVilla(
-  deviceId: string,
   villaId: string,
-  opts: { name?: string; phone?: string; userAgent?: string } = {},
+  opts: { name?: string; phone?: string } = {},
 ) {
-  if (!deviceId || !villaId) throw new Error('deviceId and villaId required');
+  if (!villaId) throw new Error('villaId required');
+  // Device identity comes from the httpOnly cookie set by middleware — client can't forge it.
+  const deviceId = cookies().get('odion-device')?.value;
+  if (!deviceId) throw new Error('Device cookie missing — reload the page');
+  const { ip, ua } = getClientMeta();
   await sql()`
-    INSERT INTO odion.devices (id, villa_id, name, phone, user_agent, first_seen, last_seen)
-    VALUES (${deviceId}, ${villaId}, ${opts.name ?? null}, ${opts.phone ?? null}, ${opts.userAgent ?? null}, now(), now())
+    INSERT INTO odion.devices (id, villa_id, name, phone, user_agent, last_ip, first_seen, last_seen)
+    VALUES (${deviceId}, ${villaId}, ${opts.name ?? null}, ${opts.phone ?? null}, ${ua}, ${ip}, now(), now())
     ON CONFLICT (id) DO UPDATE
       SET villa_id = EXCLUDED.villa_id,
           name = COALESCE(EXCLUDED.name, odion.devices.name),
           phone = COALESCE(EXCLUDED.phone, odion.devices.phone),
+          last_ip = EXCLUDED.last_ip,
           last_seen = now()
   `;
   revalidatePath('/garbage');

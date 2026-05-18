@@ -1,7 +1,7 @@
 'use server';
 
 import { sql } from '@/lib/db';
-import { isAdmin } from '@/lib/actions/admin';
+import { requireAdmin } from '@/lib/actions/admin';
 import { parseWhatsAppChat, type ParsedMessage } from '@/lib/parse/whatsapp';
 import { classify } from '@/lib/classify/insights';
 import type {
@@ -12,10 +12,6 @@ import type {
 } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import JSZip from 'jszip';
-
-async function requireAdmin() {
-  if (!(await isAdmin())) throw new Error('Admin auth required');
-}
 
 async function extractChatText(file: File): Promise<string> {
   const buf = Buffer.from(await file.arrayBuffer());
@@ -55,7 +51,7 @@ export async function ingestChatExport(formData: FormData): Promise<{
   `;
 
   const inserted = await insertMessages(messages, ingest.id);
-  const classified = await classifyPendingMessages(ingest.id);
+  const classified = await classifyPendingMessages();
 
   await sql()`
     UPDATE odion.insights_ingests
@@ -97,7 +93,7 @@ async function insertMessages(messages: ParsedMessage[], ingestId: string): Prom
   return inserted;
 }
 
-async function classifyPendingMessages(_ingestId: string): Promise<number> {
+async function classifyPendingMessages(): Promise<number> {
   // Classify ALL unclassified messages (cheap, deterministic). Includes any from
   // older ingests that for some reason never got a category.
   const rows = await sql()<{ id: string; body: string }[]>`
@@ -140,7 +136,7 @@ async function classifyPendingMessages(_ingestId: string): Promise<number> {
 export async function reclassifyAll(): Promise<number> {
   await requireAdmin();
   await sql()`UPDATE odion.insights_messages SET classified_at = NULL`;
-  return classifyPendingMessages('');
+  return classifyPendingMessages();
 }
 
 // -------- Read APIs --------

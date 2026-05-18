@@ -1,26 +1,22 @@
 'use server';
 
 import { sql } from '@/lib/db';
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-
-function getClientMeta() {
-  const h = headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0].trim() ||
-    h.get('x-real-ip') ||
-    null;
-  const ua = h.get('user-agent') || null;
-  return { ip, ua };
-}
+import { getClientMeta } from '@/lib/request';
+import { signSession, verifySession } from '@/lib/admin-session';
+import crypto from 'node:crypto';
 
 const ADMIN_COOKIE = 'odion-admin';
 
 export async function adminLogin(passcode: string): Promise<boolean> {
   const expected = process.env.ADMIN_PASSCODE;
   if (!expected) throw new Error('ADMIN_PASSCODE not configured');
-  if (passcode !== expected) return false;
-  cookies().set(ADMIN_COOKIE, '1', {
+  const a = Buffer.from(passcode, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  if (!crypto.timingSafeEqual(a, b)) return false;
+  cookies().set(ADMIN_COOKIE, signSession(), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -38,51 +34,72 @@ export async function adminLogout() {
 }
 
 export async function isAdmin(): Promise<boolean> {
-  return cookies().get(ADMIN_COOKIE)?.value === '1';
+  return verifySession(cookies().get(ADMIN_COOKIE)?.value);
 }
 
-async function requireAdmin() {
+export async function requireAdmin() {
   if (!(await isAdmin())) throw new Error('Admin auth required');
 }
 
 export async function adminVerifyVilla(villaId: string) {
   await requireAdmin();
-  await sql()`UPDATE odion.villas SET verified = true WHERE id = ${villaId}`;
   const { ip, ua } = getClientMeta();
-  await sql()`
-    INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, ip_address, user_agent)
-    VALUES ('verify_villa', ${villaId}, 'villa', ${ip}, ${ua})
-  `;
+  await sql().begin(async (tx) => {
+    await tx`UPDATE odion.villas SET verified = true WHERE id = ${villaId}`;
+    await tx`
+      INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, ip_address, user_agent)
+      VALUES ('verify_villa', ${villaId}, 'villa', ${ip}, ${ua})
+    `;
+  });
   revalidatePath('/garbage/admin/villas');
 }
 
+// Soft delete — sets deleted_at, preserves the villa row + all its skip events.
+// Restore via adminRestoreVilla.
 export async function adminDeleteVilla(villaId: string) {
   await requireAdmin();
-  await sql()`DELETE FROM odion.villas WHERE id = ${villaId}`;
-  const { ip: ip2, ua: ua2 } = getClientMeta();
-  await sql()`
-    INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, ip_address, user_agent)
-    VALUES ('delete_villa', ${villaId}, 'villa', ${ip2}, ${ua2})
-  `;
+  const { ip, ua } = getClientMeta();
+  await sql().begin(async (tx) => {
+    await tx`UPDATE odion.villas SET deleted_at = now() WHERE id = ${villaId}`;
+    await tx`
+      INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, ip_address, user_agent)
+      VALUES ('soft_delete_villa', ${villaId}, 'villa', ${ip}, ${ua})
+    `;
+  });
+  revalidatePath('/garbage/admin/villas');
+}
+
+export async function adminRestoreVilla(villaId: string) {
+  await requireAdmin();
+  const { ip, ua } = getClientMeta();
+  await sql().begin(async (tx) => {
+    await tx`UPDATE odion.villas SET deleted_at = NULL WHERE id = ${villaId}`;
+    await tx`
+      INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, ip_address, user_agent)
+      VALUES ('restore_villa', ${villaId}, 'villa', ${ip}, ${ua})
+    `;
+  });
   revalidatePath('/garbage/admin/villas');
 }
 
 export async function adminVoidEvent(eventId: string, note?: string) {
   await requireAdmin();
-  const row = await sql()<{ villa_id: string; skip_date: string }[]>`
-    SELECT villa_id, skip_date FROM odion.garbage_skip_events WHERE id = ${eventId} LIMIT 1
-  `;
-  if (row.length === 0) return;
-  await sql()`
-    INSERT INTO odion.garbage_skip_events
-      (villa_id, skip_date, supersedes_event_id, void)
-    VALUES (${row[0].villa_id}, ${row[0].skip_date}, ${eventId}, true)
-  `;
-  const { ip: ip3, ua: ua3 } = getClientMeta();
-  await sql()`
-    INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, note, ip_address, user_agent)
-    VALUES ('void_event', ${eventId}, 'skip_event', ${note ?? null}, ${ip3}, ${ua3})
-  `;
+  const { ip, ua } = getClientMeta();
+  await sql().begin(async (tx) => {
+    const row = await tx<{ villa_id: string; skip_date: string }[]>`
+      SELECT villa_id, skip_date FROM odion.garbage_skip_events WHERE id = ${eventId} LIMIT 1
+    `;
+    if (row.length === 0) return;
+    await tx`
+      INSERT INTO odion.garbage_skip_events
+        (villa_id, skip_date, supersedes_event_id, void, ip_address, user_agent)
+      VALUES (${row[0].villa_id}, ${row[0].skip_date}, ${eventId}, true, ${ip}, ${ua})
+    `;
+    await tx`
+      INSERT INTO odion.garbage_admin_actions (action, target_id, target_kind, note, ip_address, user_agent)
+      VALUES ('void_event', ${eventId}, 'skip_event', ${note ?? null}, ${ip}, ${ua})
+    `;
+  });
   revalidatePath('/garbage/history');
   revalidatePath('/garbage/today');
 }

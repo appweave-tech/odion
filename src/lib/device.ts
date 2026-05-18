@@ -1,33 +1,12 @@
 'use client';
 
-const DEVICE_KEY = 'odion:device_id';
+// Device identity is held server-side as an httpOnly cookie set by middleware.
+// This module only handles UI-state that the client legitimately needs:
+// the user's chosen villa (for fast initial render) and their display name.
+
 const VILLA_KEY = 'odion:villa_id';
 const VILLA_LABEL_KEY = 'odion:villa_label';
 const NAME_KEY = 'odion:resident_name';
-
-function uuid4(): string {
-  // crypto.randomUUID is only available in secure contexts (HTTPS or localhost).
-  // Phones hitting the LAN IP over plain http get a non-secure context, where
-  // randomUUID is undefined. crypto.getRandomValues works in any context.
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const h = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
-export function getDeviceId(): string {
-  if (typeof window === 'undefined') return '';
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id) {
-    id = uuid4();
-    localStorage.setItem(DEVICE_KEY, id);
-  }
-  return id;
-}
 
 export function getVilla(): { id: string; label: string } | null {
   if (typeof window === 'undefined') return null;

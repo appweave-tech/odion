@@ -1,14 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { findOrCreateVilla, claimVilla } from '@/lib/actions/villas';
-import { getDeviceId, setVilla, setName, getName } from '@/lib/device';
+import { setVilla, setName, getName } from '@/lib/device';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import type { Villa } from '@/lib/types';
+import { PhaseStep } from './villa-picker/PhaseStep';
+import { CustomAddStep } from './villa-picker/CustomAddStep';
+import { NameStep } from './villa-picker/NameStep';
 
 type Phase = { phase: string; count: number };
 
@@ -37,13 +37,11 @@ export function VillaPicker({
   const [name, setNameInput] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Filter client-side from preloaded list — no server round-trip on phase change.
   const villasInPhase = React.useMemo(
     () => (phase ? allVillas.filter((v) => v.phase === phase) : []),
     [allVillas, phase],
   );
 
-  // Reset villa # when phase changes
   React.useEffect(() => {
     setNumber('');
   }, [phase]);
@@ -58,7 +56,7 @@ export function VillaPicker({
     setPendingVilla(null);
   }
 
-  async function pickExisting() {
+  function pickExisting() {
     if (!phase || !number) {
       toast.error('Pick phase and villa number');
       return;
@@ -91,7 +89,8 @@ export function VillaPicker({
       setNameInput(getName());
       setStep('name');
     } catch (e) {
-      toast.error('Could not add villa');
+      const msg = e instanceof Error ? e.message : 'Could not add villa';
+      toast.error(msg);
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -102,8 +101,7 @@ export function VillaPicker({
     if (!pendingVilla) return;
     setSubmitting(true);
     try {
-      const deviceId = getDeviceId();
-      await claimVilla(deviceId, pendingVilla.id, { name: name.trim() || undefined });
+      await claimVilla(pendingVilla.id, { name: name.trim() || undefined });
       setVilla(pendingVilla.id, pendingVilla.label);
       setName(name.trim());
       toast.success(`You're villa ${pendingVilla.label}`);
@@ -111,7 +109,8 @@ export function VillaPicker({
       setOpen(false);
       reset();
     } catch (e) {
-      toast.error('Could not save villa');
+      const msg = e instanceof Error ? e.message : 'Could not save villa';
+      toast.error(msg);
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -132,126 +131,38 @@ export function VillaPicker({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent title={title}>
         {step === 'pick' && !showFallback && (
-          <div className="grid gap-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="grid gap-1">
-                <span className="text-sm text-muted-foreground">Phase</span>
-                <NativeSelect value={phase} onChange={(e) => setPhase(e.target.value)}>
-                  <option value="">— Select —</option>
-                  {phases.map((p) => (
-                    <option key={p.phase} value={p.phase}>
-                      {p.phase}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
-              <label className="grid gap-1">
-                <span className="text-sm text-muted-foreground">Villa #</span>
-                <NativeSelect
-                  value={number}
-                  onChange={(e) => setNumber(e.target.value)}
-                  disabled={!phase}
-                >
-                  <option value="">— Select —</option>
-                  {villasInPhase.map((v) => (
-                    <option key={v.id} value={String(v.number)}>
-                      {v.number}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
-            </div>
-            <Button size="lg" onClick={pickExisting} disabled={!phase || !number}>
-              Continue
-            </Button>
-            <button
-              type="button"
-              className="text-sm text-primary underline-offset-4 hover:underline min-h-10"
-              onClick={() => setShowFallback(true)}
-            >
-              Can't find my villa →
-            </button>
-          </div>
+          <PhaseStep
+            phases={phases}
+            villasInPhase={villasInPhase}
+            phase={phase}
+            number={number}
+            onPhaseChange={setPhase}
+            onNumberChange={setNumber}
+            onContinue={pickExisting}
+            onOpenFallback={() => setShowFallback(true)}
+          />
         )}
-
         {step === 'pick' && showFallback && (
-          <div className="grid gap-4 pt-2">
-            <p className="text-sm text-muted-foreground">
-              Type your phase and villa number. We'll add it now and admin will verify later.
-            </p>
-            <label className="grid gap-1">
-              <span className="text-sm text-muted-foreground">Phase (e.g. P1, P2, NGC)</span>
-              <Input
-                autoFocus
-                autoComplete="off"
-                value={newPhase}
-                onChange={(e) => setNewPhase(e.target.value)}
-                placeholder="P1"
-                autoCapitalize="characters"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm text-muted-foreground">Villa number</span>
-              <Input
-                autoComplete="off"
-                value={newNumber}
-                onChange={(e) => setNewNumber(e.target.value.replace(/\D/g, ''))}
-                placeholder="35"
-                inputMode="numeric"
-                pattern="[0-9]*"
-              />
-            </label>
-            <Button size="lg" onClick={addCustom} disabled={submitting}>
-              {submitting ? 'Adding…' : 'Add my villa'}
-            </Button>
-            <button
-              type="button"
-              className="text-sm text-muted-foreground underline-offset-4 hover:underline min-h-10"
-              onClick={() => setShowFallback(false)}
-            >
-              ← Back to phase list
-            </button>
-          </div>
+          <CustomAddStep
+            newPhase={newPhase}
+            newNumber={newNumber}
+            submitting={submitting}
+            onNewPhaseChange={setNewPhase}
+            onNewNumberChange={setNewNumber}
+            onAdd={addCustom}
+            onBack={() => setShowFallback(false)}
+          />
         )}
-
         {step === 'name' && pendingVilla && (
-          <div className="grid gap-3 pt-2">
-            <p className="text-sm text-muted-foreground">
-              You picked <span className="font-medium text-foreground">{pendingVilla.label}</span>. Your name shows up
-              next to skips you report. Optional — leave blank to stay anonymous.
-            </p>
-            <Input
-              autoFocus
-              value={name}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Your name (optional)"
-            />
-            <Button size="lg" disabled={submitting} onClick={confirmName}>
-              {submitting ? 'Saving…' : 'Confirm'}
-            </Button>
-          </div>
+          <NameStep
+            villa={pendingVilla}
+            name={name}
+            submitting={submitting}
+            onNameChange={setNameInput}
+            onConfirm={confirmName}
+          />
         )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-function NativeSelect({
-  className,
-  children,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={cn(
-        'min-h-tap w-full rounded-xl border bg-card px-3 py-3 text-base appearance-none',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-        'bg-[url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'><path fill=\'%2364748b\' d=\'M6 8 0 0h12z\'/></svg>")] bg-no-repeat bg-[right_0.75rem_center] pr-9',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </select>
   );
 }

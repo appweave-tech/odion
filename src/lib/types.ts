@@ -7,6 +7,7 @@ export type Villa = {
   auto_created: boolean;
   verified: boolean;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type Device = {

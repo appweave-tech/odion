@@ -7,6 +7,9 @@ import { renderEodDigest } from '@/lib/actions/eod';
 export async function GET(req: Request) {
   const auth = req.headers.get('authorization');
   const secret = process.env.CRON_SECRET;
+  if (process.env.NODE_ENV === 'production' && !secret) {
+    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
+  }
   if (secret && auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

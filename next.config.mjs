@@ -8,10 +8,12 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
       // Server Actions reject requests whose Origin doesn't match.
-      // Phones hit the LAN IP, so it must be in this list.
+      // Production origin must be listed; LAN entries are dev-only.
       allowedOrigins: [
-        'localhost:3010',
-        '192.168.68.53:3010',
+        'odion.appweave.tech',
+        ...(process.env.NODE_ENV !== 'production'
+          ? ['localhost:3010', '192.168.68.53:3010']
+          : []),
       ],
     },
   },

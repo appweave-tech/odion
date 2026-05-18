@@ -2,19 +2,24 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { adminVerifyVilla, adminDeleteVilla } from '@/lib/actions/admin';
+import { adminVerifyVilla, adminDeleteVilla, adminRestoreVilla } from '@/lib/actions/admin';
 import type { Villa } from '@/lib/types';
 import { toast } from 'sonner';
-import { CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Trash2, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+type Filter = 'all' | 'pending' | 'verified' | 'deleted';
 
 export function AdminVillas({ villas }: { villas: Villa[] }) {
   const [pending, setPending] = React.useTransition();
-  const [filter, setFilter] = React.useState<'all' | 'pending' | 'verified'>('all');
+  const [filter, setFilter] = React.useState<Filter>('all');
 
-  const filtered = villas.filter((v) =>
-    filter === 'all' ? true : filter === 'pending' ? !v.verified : v.verified,
-  );
+  const filtered = villas.filter((v) => {
+    if (filter === 'all') return !v.deleted_at;
+    if (filter === 'deleted') return !!v.deleted_at;
+    if (filter === 'pending') return !v.deleted_at && !v.verified;
+    return !v.deleted_at && v.verified;
+  });
 
   function verify(id: string) {
     setPending(async () => {
@@ -22,32 +27,47 @@ export function AdminVillas({ villas }: { villas: Villa[] }) {
         await adminVerifyVilla(id);
         toast.success('Verified');
       } catch (e) {
-        toast.error('Failed');
-        console.error(e);
+        toast.error(e instanceof Error ? e.message : 'Failed');
       }
     });
   }
   function del(id: string) {
-    if (!confirm('Delete this villa? All its skip events will be removed too.')) return;
+    if (!confirm('Soft-delete this villa? Its skip events stay; you can restore later.')) return;
     setPending(async () => {
       try {
         await adminDeleteVilla(id);
-        toast.success('Deleted');
+        toast.success('Deleted (soft)');
       } catch (e) {
-        toast.error('Failed');
-        console.error(e);
+        toast.error(e instanceof Error ? e.message : 'Failed');
       }
     });
   }
+  function restore(id: string) {
+    setPending(async () => {
+      try {
+        await adminRestoreVilla(id);
+        toast.success('Restored');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed');
+      }
+    });
+  }
+
+  const counts = {
+    all: villas.filter((v) => !v.deleted_at).length,
+    pending: villas.filter((v) => !v.deleted_at && !v.verified).length,
+    verified: villas.filter((v) => !v.deleted_at && v.verified).length,
+    deleted: villas.filter((v) => !!v.deleted_at).length,
+  };
 
   return (
     <div className="p-5 grid gap-4">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Villas</h1>
-        <span className="text-sm text-muted-foreground">{villas.length} total</span>
+        <span className="text-sm text-muted-foreground">{counts.all} active</span>
       </header>
-      <div className="flex gap-2">
-        {(['all', 'pending', 'verified'] as const).map((f) => (
+      <div className="flex gap-2 flex-wrap">
+        {(['all', 'pending', 'verified', 'deleted'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -56,7 +76,7 @@ export function AdminVillas({ villas }: { villas: Villa[] }) {
               filter === f && 'bg-primary text-primary-foreground border-primary',
             )}
           >
-            {f}
+            {f} <span className="opacity-70">· {counts[f]}</span>
           </button>
         ))}
       </div>
@@ -64,21 +84,41 @@ export function AdminVillas({ villas }: { villas: Villa[] }) {
         {filtered.map((v) => (
           <li key={v.id} className="px-4 py-3 flex items-center gap-3">
             <div className="flex-1">
-              <div className="font-medium">{v.label}</div>
-              <div className="text-[11px] text-muted-foreground">
-                {v.verified ? 'verified' : v.auto_created ? 'auto-created · pending' : 'pending'}
+              <div className="font-medium text-base">{v.label}</div>
+              <div className="text-xs text-muted-foreground">
+                {v.deleted_at
+                  ? 'soft-deleted'
+                  : v.verified
+                    ? 'verified'
+                    : v.auto_created
+                      ? 'auto-created · pending'
+                      : 'pending'}
               </div>
             </div>
-            {v.verified ? (
-              <CheckCircle2 className="size-5 text-primary" />
-            ) : (
-              <Button size="sm" variant="outline" disabled={pending} onClick={() => verify(v.id)}>
-                <AlertCircle className="size-4" /> Verify
+            {v.deleted_at ? (
+              <Button size="sm" variant="outline" disabled={pending} onClick={() => restore(v.id)}>
+                <RotateCcw className="size-4" /> Restore
               </Button>
+            ) : (
+              <>
+                {v.verified ? (
+                  <CheckCircle2 className="size-5 text-primary" />
+                ) : (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={() => verify(v.id)}>
+                    <AlertCircle className="size-4" /> Verify
+                  </Button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => del(v.id)}
+                  aria-label="Delete"
+                >
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              </>
             )}
-            <Button size="icon" variant="ghost" disabled={pending} onClick={() => del(v.id)} aria-label="Delete">
-              <Trash2 className="size-4 text-destructive" />
-            </Button>
           </li>
         ))}
       </ul>

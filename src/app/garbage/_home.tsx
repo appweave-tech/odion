@@ -4,7 +4,6 @@ import * as React from 'react';
 import { VillaGate } from '@/components/VillaGate';
 import { Button } from '@/components/ui/button';
 import { markSkip, unmarkSkip, getVillaSkipDates } from '@/lib/actions/skip';
-import { getDeviceId } from '@/lib/device';
 import { toast } from 'sonner';
 import { todayIST, formatISTDate, daysAgoIST, cn } from '@/lib/utils';
 import { Trash2, CheckCircle2, Check, X } from 'lucide-react';
@@ -55,16 +54,16 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
     });
     setPending(async () => {
       try {
-        const deviceId = getDeviceId();
         if (wasSkipped) {
-          await unmarkSkip({ villaId, deviceId, date });
+          await unmarkSkip({ villaId, date });
           if (date === today) toast.success('Unmarked');
         } else {
-          await markSkip({ villaId, deviceId, date });
+          await markSkip({ villaId, date });
           if (date === today) toast.success('Marked skipped for today');
         }
       } catch (e) {
-        toast.error('Could not update');
+        const msg = e instanceof Error ? e.message : 'Could not update';
+        toast.error(msg);
         console.error(e);
         await refresh();
       }

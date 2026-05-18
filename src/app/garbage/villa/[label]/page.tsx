@@ -6,8 +6,11 @@ import type { Villa } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+const LABEL_RE = /^[A-Z0-9]{1,8}-\d{1,4}$/;
+
 export default async function VillaPage({ params }: { params: { label: string } }) {
   const label = decodeURIComponent(params.label);
+  if (label.length > 16 || !LABEL_RE.test(label)) notFound();
   const [villa] = await sql()<Villa[]>`
     SELECT id, phase, number, label, display_order, auto_created, verified, created_at
     FROM odion.villas WHERE label = ${label} LIMIT 1
