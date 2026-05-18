@@ -42,13 +42,20 @@ export function GarbageNav() {
                 prefetch
                 onClick={() => setOptimistic(t.href)}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 py-2.5 min-h-tap text-[11px] transition-colors',
+                  'relative flex flex-col items-center justify-center gap-1 py-2.5 min-h-tap text-[11px] transition-colors',
                   'active:bg-accent',
-                  isActive ? 'text-primary' : 'text-muted-foreground',
+                  isActive ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
-                <Icon className="size-5" />
-                {t.label}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-b-full transition-opacity',
+                    isActive ? 'bg-primary opacity-100' : 'opacity-0',
+                  )}
+                />
+                <Icon className={cn('size-5', isActive && 'text-primary')} />
+                <span className={cn(isActive && 'font-medium')}>{t.label}</span>
               </Link>
             </li>
           );

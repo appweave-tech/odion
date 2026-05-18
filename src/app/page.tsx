@@ -1,16 +1,14 @@
 import Link from 'next/link';
-import { Trash2, BarChart3 } from 'lucide-react';
+import { Trash2, BarChart3, ArrowRight } from 'lucide-react';
 
 function ModuleCard({
   href,
   icon,
-  iconClass,
   title,
   subtitle,
 }: {
   href: string;
   icon: React.ReactNode;
-  iconClass: string;
   title: string;
   subtitle: string;
 }) {
@@ -19,12 +17,14 @@ function ModuleCard({
       href={href}
       className="rounded-2xl border bg-card p-5 active:scale-[0.98] transition flex items-center gap-4 min-h-tap hover:bg-accent/40"
     >
-      <div className={`rounded-xl p-3 ${iconClass}`}>{icon}</div>
+      <span aria-hidden className="text-foreground/80 shrink-0">
+        {icon}
+      </span>
       <div className="flex-1 min-w-0">
-        <div className="font-medium">{title}</div>
+        <div className="font-medium text-base">{title}</div>
         <div className="text-sm text-muted-foreground">{subtitle}</div>
       </div>
-      <span aria-hidden className="text-muted-foreground">→</span>
+      <ArrowRight aria-hidden className="size-4 text-muted-foreground shrink-0" />
     </Link>
   );
 }
@@ -33,24 +33,22 @@ export default function HomePage() {
   return (
     <main className="flex-1 flex flex-col max-w-md mx-auto w-full">
       <header className="px-5 pt-10 pb-6">
-        <p className="text-sm text-muted-foreground">Welcome To</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Odion · The Woods Of East</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Community Ops, One Module At A Time.</p>
+        <p className="text-sm text-muted-foreground">Welcome to</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Odion · The Woods of East</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Community ops, one module at a time.</p>
       </header>
       <section className="px-5 grid gap-3">
         <ModuleCard
           href="/garbage"
           icon={<Trash2 className="size-6" />}
-          iconClass="bg-primary/10 text-primary"
           title="Garbage Tracker"
-          subtitle="Log Skipped Collections, See History."
+          subtitle="Log skipped collections, see history."
         />
         <ModuleCard
           href="/insights"
           icon={<BarChart3 className="size-6" />}
-          iconClass="bg-indigo-500/10 text-indigo-600"
           title="Community Insights"
-          subtitle="What The RWA Group Is Talking About — Auto-Classified."
+          subtitle="What the RWA group is talking about — auto-classified."
         />
       </section>
       <footer className="mt-auto px-5 py-8 text-xs text-muted-foreground text-center">

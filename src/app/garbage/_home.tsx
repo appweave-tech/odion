@@ -10,10 +10,19 @@ import { Trash2, CheckCircle2, Check, X } from 'lucide-react';
 import type { Villa } from '@/lib/types';
 
 type Phase = { phase: string; count: number };
+type Stats = { villas: number; skipsToday: number };
 
-export function GarbageHome({ phases, allVillas }: { phases: Phase[]; allVillas: Villa[] }) {
+export function GarbageHome({
+  phases,
+  allVillas,
+  stats,
+}: {
+  phases: Phase[];
+  allVillas: Villa[];
+  stats: Stats;
+}) {
   return (
-    <VillaGate phases={phases} allVillas={allVillas}>
+    <VillaGate phases={phases} allVillas={allVillas} stats={stats}>
       {(villa) => <VillaView villaId={villa.id} villaLabel={villa.label} />}
     </VillaGate>
   );

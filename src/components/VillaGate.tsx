@@ -4,18 +4,21 @@ import * as React from 'react';
 import { getVilla } from '@/lib/device';
 import { VillaPicker } from '@/components/VillaPicker';
 import { Button } from '@/components/ui/button';
-import { Home } from 'lucide-react';
+import { Home, Users, AlertCircle } from 'lucide-react';
 import type { Villa } from '@/lib/types';
 
 type Phase = { phase: string; count: number };
+type Stats = { villas: number; skipsToday: number };
 
 export function VillaGate({
   phases,
   allVillas,
+  stats,
   children,
 }: {
   phases: Phase[];
   allVillas: Villa[];
+  stats: Stats;
   children: (villa: { id: string; label: string }) => React.ReactNode;
 }) {
   const [villa, setVillaState] = React.useState<{ id: string; label: string } | null>(null);
@@ -60,6 +63,29 @@ export function VillaGate({
             />
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <Users className="size-3.5" /> Neighbours
+            </div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{stats.villas}</div>
+            <div className="text-xs text-muted-foreground">villas registered</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <AlertCircle className="size-3.5" /> Today
+            </div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">{stats.skipsToday}</div>
+            <div className="text-xs text-muted-foreground">
+              skip{stats.skipsToday === 1 ? '' : 's'} reported
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground text-center mt-2">
+          Keeping the BBMP honest, one collection at a time.
+        </p>
       </div>
     );
   }

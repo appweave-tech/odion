@@ -26,7 +26,11 @@ export default async function TodayPage() {
           {skips.map((s) => (
             <li key={s.id} className="flex items-center justify-between px-4 py-3 min-h-tap gap-3">
               <div className="font-medium text-base">{s.villa_label}</div>
-              <div className="text-sm text-muted-foreground">{s.reporter_name ?? '—'}</div>
+              {s.reporter_name ? (
+                <div className="text-sm text-muted-foreground">{s.reporter_name}</div>
+              ) : (
+                <div className="text-xs text-muted-foreground/70 italic">anonymous</div>
+              )}
             </li>
           ))}
         </ul>
