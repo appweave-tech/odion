@@ -8,22 +8,46 @@ import type {
   CategoryStat,
   InsightsIngest,
   LiveIssue,
-  TrendBucket,
 } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import JSZip from 'jszip';
+
+// Cap on zipped + unzipped content. The 10mb body limit (next.config.mjs) bounds upload;
+// these bound the *expansion* so a zip-bomb can't OOM the Node process.
+const MAX_ZIP_ENTRIES = 100;
+const MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024; // 50 MiB
 
 async function extractChatText(file: File): Promise<string> {
   const buf = Buffer.from(await file.arrayBuffer());
   const isZip = file.name.toLowerCase().endsWith('.zip') || buf.slice(0, 2).toString() === 'PK';
   if (!isZip) return buf.toString('utf8');
+
   const zip = await JSZip.loadAsync(buf);
+  const entries = Object.values(zip.files);
+  if (entries.length > MAX_ZIP_ENTRIES) {
+    throw new Error(`Zip has too many entries (${entries.length} > ${MAX_ZIP_ENTRIES})`);
+  }
+  // JSZip exposes `_data.uncompressedSize` for compressed entries; sum what we know.
+  let total = 0;
+  for (const e of entries) {
+    const size = (e as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize;
+    if (typeof size === 'number') total += size;
+    if (total > MAX_UNCOMPRESSED_BYTES) {
+      throw new Error(`Zip uncompressed payload too large (> ${MAX_UNCOMPRESSED_BYTES} bytes)`);
+    }
+  }
+
   const entry =
     zip.file(/_chat\.txt$/i)[0] ??
     zip.file(/chat\.txt$/i)[0] ??
     zip.file(/\.txt$/i)[0];
   if (!entry) throw new Error('No _chat.txt found in zip');
   return entry.async('string');
+}
+
+function sanitizeFilename(name: string): string {
+  // Strip ASCII control chars + RTL/LTR override characters that mangle admin UI display.
+  return name.replace(/[\x00-\x1f‪-‮]/g, '').slice(0, 255);
 }
 
 export async function ingestChatExport(formData: FormData): Promise<{
@@ -42,35 +66,52 @@ export async function ingestChatExport(formData: FormData): Promise<{
 
   const first = messages[0].ts;
   const last = messages[messages.length - 1].ts;
+  const cleanName = sanitizeFilename(file.name);
 
-  const [ingest] = await sql()<{ id: string }[]>`
-    INSERT INTO odion.insights_ingests
-      (filename, raw_size_bytes, parsed_count, chat_first_ts, chat_last_ts, status)
-    VALUES (${file.name}, ${file.size}, ${messages.length}, ${first}, ${last}, 'parsed')
-    RETURNING id
-  `;
+  // Transactional: ingest row + messages + status update land together or not at all.
+  // Reclassify runs on the same tx so the per-ingest count is accurate and a crash mid-flight
+  // can't leave 'parsed' rows orphaned.
+  const result = await sql().begin(async (tx) => {
+    const [ingest] = await tx<{ id: string }[]>`
+      INSERT INTO odion.insights_ingests
+        (filename, raw_size_bytes, parsed_count, chat_first_ts, chat_last_ts, status)
+      VALUES (${cleanName}, ${file.size}, ${messages.length}, ${first}, ${last}, 'parsed')
+      RETURNING id
+    `;
 
-  const inserted = await insertMessages(messages, ingest.id);
-  const classified = await classifyPendingMessages();
+    const inserted = await insertMessagesTx(tx, messages, ingest.id);
+    const classified = await classifyPendingMessagesTx(tx);
 
-  await sql()`
-    UPDATE odion.insights_ingests
-       SET inserted_count = ${inserted},
-           classified_count = ${classified},
-           status = 'classified'
-     WHERE id = ${ingest.id}
-  `;
+    await tx`
+      UPDATE odion.insights_ingests
+         SET inserted_count = ${inserted},
+             classified_count = ${classified},
+             status = 'classified'
+       WHERE id = ${ingest.id}
+    `;
+    return { ingest_id: ingest.id, inserted, classified };
+  });
 
   revalidatePath('/insights');
   revalidatePath('/insights/admin');
 
-  return { ingest_id: ingest.id, parsed: messages.length, inserted, classified };
+  return {
+    ingest_id: result.ingest_id,
+    parsed: messages.length,
+    inserted: result.inserted,
+    classified: result.classified,
+  };
 }
 
-async function insertMessages(messages: ParsedMessage[], ingestId: string): Promise<number> {
+// Inside a `begin` callback the parameter is the same template-tagged function as `sql()` —
+// just narrowed by postgres.js. We accept the structural shape (TS infers it from the call site).
+// Using `any` here is a deliberate concession to the postgres.js types; runtime is identical.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Tx = any;
+
+async function insertMessagesTx(tx: Tx, messages: ParsedMessage[], ingestId: string): Promise<number> {
   if (messages.length === 0) return 0;
 
-  // Batched insert with ON CONFLICT DO NOTHING (content_hash unique).
   const BATCH = 500;
   let inserted = 0;
   for (let i = 0; i < messages.length; i += BATCH) {
@@ -82,9 +123,9 @@ async function insertMessages(messages: ParsedMessage[], ingestId: string): Prom
       content_hash: m.content_hash,
       ingest_id: ingestId,
     }));
-    const result = await sql()`
+    const result = await tx`
       INSERT INTO odion.insights_messages
-        ${sql()(rows, 'ts', 'sender', 'body', 'content_hash', 'ingest_id')}
+        ${tx(rows, 'ts', 'sender', 'body', 'content_hash', 'ingest_id')}
       ON CONFLICT (content_hash) DO NOTHING
       RETURNING id
     `;
@@ -93,29 +134,35 @@ async function insertMessages(messages: ParsedMessage[], ingestId: string): Prom
   return inserted;
 }
 
-async function classifyPendingMessages(): Promise<number> {
-  // Classify ALL unclassified messages (cheap, deterministic). Includes any from
-  // older ingests that for some reason never got a category.
-  const rows = await sql()<{ id: string; body: string }[]>`
-    SELECT id, body FROM odion.insights_messages WHERE classified_at IS NULL
-  `;
-  if (rows.length === 0) return 0;
+// Cursor-batched classifier: never load the whole table into memory.
+// Holds an advisory lock so a concurrent reclassify can't double-write.
+const RECLASSIFY_LOCK_ID = 7340172; // arbitrary constant — `select pg_advisory_xact_lock`
+const CLASSIFY_BATCH = 500;
 
-  const BATCH = 500;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const slice = rows.slice(i, i + BATCH);
+async function classifyPendingMessagesTx(tx: Tx): Promise<number> {
+  await tx`SELECT pg_advisory_xact_lock(${RECLASSIFY_LOCK_ID})`;
+  let total = 0;
+  // Cursor pattern: pull a batch, classify, write, repeat until no rows.
+  while (true) {
+    const rows = await tx<{ id: string; body: string }[]>`
+      SELECT id, body FROM odion.insights_messages
+       WHERE classified_at IS NULL
+       ORDER BY id
+       LIMIT ${CLASSIFY_BATCH}
+    `;
+    if (rows.length === 0) break;
     const ids: string[] = [];
     const cats: string[] = [];
     const intents: string[] = [];
     const phases: (string | null)[] = [];
-    for (const r of slice) {
+    for (const r of rows) {
       const c = classify(r.body);
       ids.push(r.id);
       cats.push(c.category);
       intents.push(c.intent);
       phases.push(c.phase);
     }
-    await sql()`
+    await tx`
       UPDATE odion.insights_messages AS m
          SET category = v.category,
              intent = v.intent,
@@ -129,14 +176,20 @@ async function classifyPendingMessages(): Promise<number> {
              ) AS v(id, category, intent, phase)
        WHERE m.id = v.id
     `;
+    total += rows.length;
   }
-  return rows.length;
+  return total;
 }
 
 export async function reclassifyAll(): Promise<number> {
   await requireAdmin();
-  await sql()`UPDATE odion.insights_messages SET classified_at = NULL`;
-  return classifyPendingMessages();
+  // Single transaction holds the advisory lock through nulling + reclassifying,
+  // so a concurrent ingest can't race-classify the same rows.
+  return sql().begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(${RECLASSIFY_LOCK_ID})`;
+    await tx`UPDATE odion.insights_messages SET classified_at = NULL`;
+    return classifyPendingMessagesTx(tx);
+  });
 }
 
 // -------- Read APIs --------
@@ -214,19 +267,6 @@ export async function getLiveIssues(): Promise<LiveIssue[]> {
       ) agg
       JOIN odion.insights_categories c ON c.key = agg.category
      ORDER BY agg.recent_count DESC, c.display_order
-  `;
-}
-
-export async function getWeeklyTrend(weeks = 12): Promise<TrendBucket[]> {
-  return sql()<TrendBucket[]>`
-    SELECT date_trunc('week', ts)::date AS week_start,
-           category,
-           COUNT(*)::int AS count
-      FROM odion.insights_messages
-     WHERE category IS NOT NULL
-       AND ts > now() - (${weeks} || ' weeks')::interval
-     GROUP BY 1, 2
-     ORDER BY 1, 2
   `;
 }
 

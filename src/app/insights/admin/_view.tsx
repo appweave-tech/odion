@@ -28,6 +28,14 @@ export function InsightsAdmin({ last, overall, recent }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   async function onPick(file: File) {
+    // Client-side size check — match next.config.mjs bodySizeLimit (10mb).
+    // Bouncing here gives a clean toast instead of an opaque server-side error after upload.
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast.error(`File too big (${(file.size / 1024 / 1024).toFixed(1)}MB · 10MB max)`);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
@@ -37,8 +45,9 @@ export function InsightsAdmin({ last, overall, recent }: Props) {
         `Parsed ${res.parsed} · added ${res.inserted} new · classified ${res.classified}`,
       );
       router.refresh();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Ingest failed');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Ingest failed';
+      toast.error(msg);
       console.error(e);
     } finally {
       setUploading(false);
@@ -51,8 +60,8 @@ export function InsightsAdmin({ last, overall, recent }: Props) {
       const n = await reclassifyAll();
       toast.success(`Re-classified ${n} messages`);
       router.refresh();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Re-classify failed');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Re-classify failed');
     }
   }
 

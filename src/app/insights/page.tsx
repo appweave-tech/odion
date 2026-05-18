@@ -38,14 +38,17 @@ export default async function InsightsPage() {
   const complaintsLast7 = stats.reduce((s, c) => s + c.complaints7, 0);
 
   return (
-    <main className="p-5 grid gap-5 max-w-4xl mx-auto pb-12">
-      <header className="grid gap-1">
-        <p className="text-sm text-muted-foreground">Odion · The Woods of East</p>
+    <main className="p-5 grid gap-6 max-w-4xl mx-auto pb-16">
+      <header className="grid gap-1.5">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Odion · The Woods of East
+        </p>
         <h1 className="text-2xl font-semibold">Community Insights</h1>
         <p className="text-sm text-muted-foreground">
-          What the RWA WhatsApp group is talking about — auto-classified so we can act on patterns, not memory.
+          What the RWA WhatsApp group is talking about — auto-classified so we can act on
+          patterns, not memory.
         </p>
-        <div className="mt-1">
+        <div className="mt-2">
           <FreshnessChip uploadedAt={last.uploaded_at} chatLastTs={last.chat_last_ts} />
         </div>
       </header>
@@ -75,34 +78,34 @@ export default async function InsightsPage() {
         />
       </section>
 
-      <section className="rounded-2xl border bg-card p-5 grid gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Issues raising heat (last 7 days)</h2>
-          <span className="text-xs text-muted-foreground">≥ 2 residents</span>
+      <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-medium text-base">Issues raising heat</h2>
+          <span className="text-xs text-muted-foreground shrink-0">7d · ≥ 2 residents</span>
         </div>
         <LiveIssuesList items={live} />
       </section>
 
-      <section className="rounded-2xl border bg-card p-5 grid gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Category breakdown</h2>
-          <span className="text-xs text-muted-foreground">All time</span>
+      <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-medium text-base">Category breakdown</h2>
+          <span className="text-xs text-muted-foreground shrink-0">All time</span>
         </div>
-        <ul className="grid gap-2">
+        <ul className="grid gap-3">
           {stats
             .filter((s) => s.total > 0)
             .sort((a, b) => b.total - a.total)
             .map((s) => (
-              <li key={s.category} className="grid gap-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span>{s.emoji}</span>
-                    <span className="font-medium">{s.label}</span>
+              <li key={s.category} className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span aria-hidden>{s.emoji}</span>
+                    <span className="font-medium truncate">{s.label}</span>
                   </span>
-                  <span className="tabular-nums text-muted-foreground">
+                  <span className="tabular-nums text-muted-foreground shrink-0">
                     {s.total.toLocaleString('en-IN')}
                     {s.last7 > 0 && (
-                      <span className="ml-2 text-foreground">+{s.last7} this week</span>
+                      <span className="ml-2 text-foreground">+{s.last7}</span>
                     )}
                   </span>
                 </div>
@@ -112,16 +115,20 @@ export default async function InsightsPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border bg-card p-5 grid gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Most active (last 30 days)</h2>
-          <Calendar className="size-4 text-muted-foreground" />
+      <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-medium text-base">Most active</h2>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+            <Calendar className="size-3.5" /> 30d
+          </span>
         </div>
-        <ul className="grid gap-1.5">
+        <ul className="grid divide-y">
           {contributors.map((c) => (
-            <li key={c.sender} className="flex items-center justify-between text-sm">
-              <span className="truncate pr-3">{c.sender}</span>
-              <span className="tabular-nums text-muted-foreground">{c.count}</span>
+            <li key={c.sender} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="truncate">{c.sender}</span>
+              <span className="tabular-nums text-muted-foreground shrink-0">
+                {c.count.toLocaleString('en-IN')}
+              </span>
             </li>
           ))}
         </ul>
@@ -150,14 +157,14 @@ function Tile({
   accent?: 'destructive';
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div className="rounded-xl border bg-card p-3 sm:p-4">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {icon}
-        <span>{label}</span>
+        <span className="truncate">{label}</span>
       </div>
       <div
         className={
-          'text-2xl font-semibold tabular-nums mt-1 ' +
+          'text-xl sm:text-2xl font-semibold tabular-nums mt-1 ' +
           (accent === 'destructive' && value > 0 ? 'text-destructive' : '')
         }
       >
