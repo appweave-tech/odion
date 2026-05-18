@@ -79,7 +79,6 @@ export type LiveIssue = {
   recent_count: number;
   unique_senders: number;
   last_ts: string;
-  sample_bodies: string[];
 };
 
 export type TrendBucket = {

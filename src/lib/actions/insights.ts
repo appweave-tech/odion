@@ -189,6 +189,8 @@ export async function getCategoryStats(): Promise<CategoryStat[]> {
 }
 
 export async function getLiveIssues(): Promise<LiveIssue[]> {
+  // Bodies are intentionally not selected — RSC payload would leak raw chat text
+  // even when the UI doesn't render it. See audit finding.
   return sql()<LiveIssue[]>`
     SELECT c.key       AS category,
            c.label     AS label,
@@ -196,14 +198,12 @@ export async function getLiveIssues(): Promise<LiveIssue[]> {
            c.color     AS color,
            agg.recent_count::int   AS recent_count,
            agg.unique_senders::int AS unique_senders,
-           agg.last_ts             AS last_ts,
-           agg.sample_bodies       AS sample_bodies
+           agg.last_ts             AS last_ts
       FROM (
         SELECT category,
                COUNT(*)                                  AS recent_count,
                COUNT(DISTINCT sender)                    AS unique_senders,
-               MAX(ts)                                   AS last_ts,
-               (ARRAY_AGG(LEFT(body, 240) ORDER BY ts DESC))[1:3] AS sample_bodies
+               MAX(ts)                                   AS last_ts
           FROM odion.insights_messages
          WHERE ts > now() - interval '7 days'
            AND category IS NOT NULL

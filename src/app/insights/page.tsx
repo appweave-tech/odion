@@ -5,10 +5,8 @@ import {
   getLiveIssues,
   getOverallStats,
   getTopContributors,
-  getWeeklyTrend,
 } from '@/lib/actions/insights';
 import { FreshnessChip } from './_freshness';
-import { CategoryHeatmap } from './_heatmap';
 import { LiveIssuesList } from './_live';
 import { AlertOctagon, MessageCircle, Users, Calendar } from 'lucide-react';
 
@@ -16,12 +14,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function InsightsPage() {
-  const [last, overall, stats, live, trend, contributors] = await Promise.all([
+  const [last, overall, stats, live, contributors] = await Promise.all([
     getLastIngest(),
     getOverallStats(),
     getCategoryStats(),
     getLiveIssues(),
-    getWeeklyTrend(12),
     getTopContributors(8),
   ]);
 
@@ -115,14 +112,6 @@ export default async function InsightsPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border bg-card p-5 grid gap-3 overflow-x-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Activity heatmap</h2>
-          <span className="text-xs text-muted-foreground">Last 12 weeks · category × week</span>
-        </div>
-        <CategoryHeatmap categories={stats} trend={trend} weeks={12} />
-      </section>
-
       <section className="rounded-2xl border bg-card p-5 grid gap-3">
         <div className="flex items-center justify-between">
           <h2 className="font-medium">Most active (last 30 days)</h2>
@@ -192,15 +181,11 @@ function Bar({ pct, color }: { pct: number; color: string }) {
 function Footer() {
   return (
     <footer className="mt-2 text-center text-xs text-muted-foreground">
-      Built by{' '}
+      Built By{' '}
       <a className="underline" href="https://appweave.tech" target="_blank" rel="noreferrer">
         Appweave
       </a>{' '}
-      · classification is automated · contact{' '}
-      <a className="underline" href="mailto:shri@appweave.tech">
-        shri@appweave.tech
-      </a>{' '}
-      for corrections.
+      · Classification Is Automated.
     </footer>
   );
 }
