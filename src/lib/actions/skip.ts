@@ -48,19 +48,28 @@ export async function markSkip(input: {
 
   try {
     await sql().begin(async (tx) => {
-      const existing = await tx<{ id: string; void: boolean }[]>`
+      // Head of the audit chain for this (villa, date), regardless of void state.
+      // Querying garbage_skip_events_current would hide void heads — that masks the
+      // unmark→re-mark path and the new insert collides with gse_active_uniq.
+      const head = await tx<{ id: string; void: boolean }[]>`
         SELECT e.id, e.void
-        FROM odion.garbage_skip_events_current e
+        FROM odion.garbage_skip_events e
         WHERE e.villa_id = ${villaId} AND e.skip_date = ${date}
+          AND NOT EXISTS (
+            SELECT 1 FROM odion.garbage_skip_events s
+            WHERE s.supersedes_event_id = e.id
+          )
+        ORDER BY e.created_at DESC
         LIMIT 1
       `;
-      if (existing.length > 0 && !existing[0].void) return; // idempotent
+      if (head.length > 0 && !head[0].void) return; // already marked
 
-      if (existing.length > 0 && existing[0].void) {
+      if (head.length > 0) {
+        // Head is a void row from a previous unmark — chain the new mark off it.
         await tx`
           INSERT INTO odion.garbage_skip_events
             (villa_id, skip_date, reported_by_device, supersedes_event_id, void, note, ip_address, user_agent)
-          VALUES (${villaId}, ${date}, ${deviceId}, ${existing[0].id}, false, ${input.note ?? null}, ${ip}, ${ua})
+          VALUES (${villaId}, ${date}, ${deviceId}, ${head[0].id}, false, ${input.note ?? null}, ${ip}, ${ua})
         `;
       } else {
         await tx`
