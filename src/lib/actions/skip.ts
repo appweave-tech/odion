@@ -23,7 +23,7 @@ async function assertDeviceOwnsVilla(deviceId: string, villaId: string) {
   }
 }
 
-const EDIT_WINDOW_DAYS = 7;
+const EDIT_WINDOW_DAYS = 3;
 
 export type CurrentSkipForVilla = {
   skip_date: string;

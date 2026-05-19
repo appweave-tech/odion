@@ -79,7 +79,7 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
     });
   }
 
-  const days = Array.from({ length: 7 }, (_, i) => daysAgoIST(i));
+  const days = Array.from({ length: 3 }, (_, i) => daysAgoIST(i));
   const todaySkipped = skipped.has(today);
 
   return (
@@ -118,7 +118,7 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Past 7 days</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">Past 3 days</h3>
         {loading ? (
           <div className="h-40 rounded-2xl bg-muted animate-pulse" />
         ) : (
