@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono, Fraunces } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
 
@@ -14,6 +14,14 @@ const mono = JetBrains_Mono({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-mono',
+});
+// Fraunces — warm serif used for display copy on /insights (Pulse Feed aesthetic).
+const display = Fraunces({
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['500', '700', '900'],
+  style: ['normal', 'italic'],
+  variable: '--font-display',
 });
 
 export const metadata: Metadata = {
@@ -41,7 +49,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
       <body className="font-sans">
         <div className="min-h-dvh flex flex-col">{children}</div>
         <Toaster position="top-center" />
