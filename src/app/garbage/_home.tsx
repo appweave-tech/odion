@@ -141,8 +141,10 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
                     <span className="text-base">{formatISTDate(d)}</span>
                     <span
                       className={cn(
-                        'flex items-center gap-1.5 text-sm font-medium',
-                        isSkipped ? 'text-destructive' : 'text-muted-foreground',
+                        'flex items-center gap-1.5 text-sm font-medium px-2.5 py-1 rounded-full border',
+                        isSkipped
+                          ? 'bg-destructive/10 text-destructive border-destructive/30'
+                          : 'bg-muted text-muted-foreground border-transparent',
                       )}
                     >
                       {isSkipped ? (
