@@ -89,7 +89,6 @@ export function CategoryPulseList({ items }: { items: CategoryPulse[] }) {
           isChronic ? 'chronic' : null,
         ].filter(Boolean);
         const sparkColor = isQuiet ? '#cbd0d7' : c.color ?? '#94a3b8';
-        const deltaColor = tier === 'hot' || tier === 'warm' ? 'text-destructive' : 'text-muted-foreground';
 
         return (
           <li
@@ -115,7 +114,7 @@ export function CategoryPulseList({ items }: { items: CategoryPulse[] }) {
             <div className="hidden sm:block w-[84px] h-7">
               <Spark data={c.daily_counts} color={sparkColor} />
             </div>
-            <div className="text-right flex flex-col items-end gap-1 shrink-0">
+            <div className="text-right shrink-0">
               {isQuiet ? (
                 <span className="rounded-full text-[11px] px-2.5 py-1 font-bold bg-muted text-muted-foreground">—</span>
               ) : (
@@ -126,9 +125,6 @@ export function CategoryPulseList({ items }: { items: CategoryPulse[] }) {
                   {c.pill_count} msg{c.pill_count === 1 ? '' : 's'}
                 </span>
               )}
-              <span className={'text-[11px] font-semibold tabular-nums ' + deltaColor}>
-                +{c.last7} this wk
-              </span>
             </div>
           </li>
         );

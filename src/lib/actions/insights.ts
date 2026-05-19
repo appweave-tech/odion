@@ -336,6 +336,7 @@ export async function getTopContributors(limit = 8): Promise<{ sender: string; c
 export async function getOverallStats(): Promise<{
   total_messages: number;
   unique_senders: number;
+  unique_senders_30d: number;
   first_ts: string | null;
   last_ts: string | null;
   classified: number;
@@ -343,12 +344,16 @@ export async function getOverallStats(): Promise<{
   const [row] = await sql()<{
     total_messages: string;
     unique_senders: string;
+    unique_senders_30d: string;
     first_ts: string | null;
     last_ts: string | null;
     classified: string;
   }[]>`
     SELECT COUNT(*)::text                                                     AS total_messages,
            COUNT(DISTINCT sender)::text                                       AS unique_senders,
+           COUNT(DISTINCT sender) FILTER (
+             WHERE ts > now() - interval '30 days'
+           )::text                                                            AS unique_senders_30d,
            MIN(ts)                                                            AS first_ts,
            MAX(ts)                                                            AS last_ts,
            COUNT(*) FILTER (WHERE classified_at IS NOT NULL)::text            AS classified
@@ -357,6 +362,7 @@ export async function getOverallStats(): Promise<{
   return {
     total_messages: Number(row.total_messages),
     unique_senders: Number(row.unique_senders),
+    unique_senders_30d: Number(row.unique_senders_30d),
     first_ts: row.first_ts,
     last_ts: row.last_ts,
     classified: Number(row.classified),

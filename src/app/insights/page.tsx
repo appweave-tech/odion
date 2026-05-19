@@ -65,7 +65,7 @@ export default async function InsightsPage() {
           <Chip emoji="🚨" value={liveIssueCount} label="live issues" alert />
           <Chip emoji="💬" value={totalLast7} label="messages · 7d" />
           <Chip emoji="📣" value={complaintsLast7} label="complaints · 7d" alert />
-          <Chip emoji="👥" value={overall.unique_senders} label="active voices" />
+          <Chip emoji="👥" value={overall.unique_senders_30d} label="active voices · 30d" />
         </div>
       </section>
 
@@ -163,12 +163,12 @@ function Chip({
 
 function Footer() {
   return (
-    <footer className="mt-2 text-center text-xs text-muted-foreground italic">
-      made with care by{' '}
-      <a className="underline not-italic" href="https://appweave.tech" target="_blank" rel="noreferrer">
+    <footer className="mt-2 text-center text-xs text-muted-foreground">
+      Built By{' '}
+      <a className="underline" href="https://appweave.tech" target="_blank" rel="noreferrer">
         Appweave
       </a>{' '}
-      · the robots do the classifying
+      — Community Ops Tools.
     </footer>
   );
 }
