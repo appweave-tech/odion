@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { markSkip, unmarkSkip, getVillaSkipDates } from '@/lib/actions/skip';
 import { toast } from 'sonner';
 import { todayIST, formatISTDate, daysAgoIST, cn } from '@/lib/utils';
-import { Trash2, CheckCircle2, Check, X } from 'lucide-react';
+import { Trash2, AlertTriangle, Check, X } from 'lucide-react';
 import type { Villa } from '@/lib/types';
 
 type Phase = { phase: string; count: number };
@@ -90,23 +90,32 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
         <div className="text-sm text-muted-foreground mt-1">{formatISTDate(today)}</div>
       </div>
 
-      <Button
-        size="lg"
-        variant={todaySkipped ? 'outline' : 'default'}
-        className="w-full h-20 text-lg rounded-2xl"
-        onClick={() => toggle(today)}
-        disabled={loading}
-      >
-        {todaySkipped ? (
-          <>
-            <CheckCircle2 className="size-6" /> Skipped (tap to undo)
-          </>
-        ) : (
-          <>
-            <Trash2 className="size-6" /> Mark today as skipped
-          </>
+      <div className="grid gap-2">
+        <Button
+          size="lg"
+          variant="destructive"
+          className={cn(
+            'w-full h-20 text-lg rounded-2xl',
+            todaySkipped &&
+              'bg-destructive/10 text-destructive hover:bg-destructive/15 border border-destructive/30',
+          )}
+          onClick={() => toggle(today)}
+          disabled={loading}
+        >
+          {todaySkipped ? (
+            <>
+              <AlertTriangle className="size-6" /> Skipped today
+            </>
+          ) : (
+            <>
+              <Trash2 className="size-6" /> Mark today as skipped
+            </>
+          )}
+        </Button>
+        {todaySkipped && (
+          <p className="text-xs text-muted-foreground text-center">Tap to unmark.</p>
         )}
-      </Button>
+      </div>
 
       <div>
         <h3 className="text-sm font-medium text-muted-foreground mb-2">Past 7 days</h3>
