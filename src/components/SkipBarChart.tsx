@@ -18,7 +18,7 @@ export function SkipBarChart({
 
   return (
     <div className="grid gap-3">
-      <div className="flex items-end gap-[3px] h-56 px-1" aria-label="Skips per day, last 30 days">
+      <div className="flex items-end gap-1 h-56 px-1" aria-label="Skips per day, last 30 days">
         {cells.map((c) => {
           const isToday = c.date === today;
           const barPx = c.count > 0 ? Math.max((c.count / peak) * MAX_BAR_PX, 10) : 2;

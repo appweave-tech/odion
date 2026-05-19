@@ -1,4 +1,3 @@
-import { CalendarDays, History, Home, Settings } from 'lucide-react';
 import { GarbageNav } from './_nav';
 
 export default function GarbageLayout({ children }: { children: React.ReactNode }) {

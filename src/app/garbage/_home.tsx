@@ -113,9 +113,6 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
             </>
           )}
         </Button>
-        {todaySkipped && (
-          <p className="text-xs text-muted-foreground text-center">Tap to unmark.</p>
-        )}
       </div>
 
       <div>
@@ -163,8 +160,8 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
             })}
           </ul>
         )}
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Tap any day to toggle. Older edits need admin help.
+        <p className="mt-2 text-xs text-muted-foreground">
+          Older edits need admin help.
         </p>
       </div>
     </div>
