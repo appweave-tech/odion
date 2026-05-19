@@ -3,12 +3,11 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, History, Home, Settings } from 'lucide-react';
+import { History, Home, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/garbage', label: 'Home', icon: Home },
-  { href: '/garbage/today', label: 'Today', icon: CalendarDays },
   { href: '/garbage/history', label: 'History', icon: History },
   { href: '/garbage/settings', label: 'Settings', icon: Settings },
 ];
@@ -28,7 +27,7 @@ export function GarbageNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-3">
         {TABS.map((t) => {
           const isActive =
             t.href === '/garbage'

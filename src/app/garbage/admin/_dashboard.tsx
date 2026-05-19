@@ -32,7 +32,7 @@ export function AdminDashboard({
         <div className="font-medium">Manage villas</div>
         <div className="text-sm text-muted-foreground">Verify, merge, delete villas</div>
       </Link>
-      <Link href="/garbage/today" className="rounded-2xl border bg-card p-5 min-h-tap active:bg-accent">
+      <Link href="/garbage/history" className="rounded-2xl border bg-card p-5 min-h-tap active:bg-accent">
         <div className="font-medium">Today's digest</div>
         <div className="text-sm text-muted-foreground">Preview + copy WhatsApp message</div>
       </Link>

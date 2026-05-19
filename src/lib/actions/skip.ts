@@ -80,7 +80,6 @@ export async function markSkip(input: {
     if (code !== '23505') throw e;
   }
   revalidatePath('/garbage');
-  revalidatePath('/garbage/today');
   revalidatePath('/garbage/history');
 }
 
@@ -107,7 +106,6 @@ export async function unmarkSkip(input: { villaId: string; date: string }) {
     VALUES (${villaId}, ${date}, ${deviceId}, ${existing[0].id}, true, ${ip}, ${ua})
   `;
   revalidatePath('/garbage');
-  revalidatePath('/garbage/today');
   revalidatePath('/garbage/history');
 }
 

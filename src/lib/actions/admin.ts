@@ -101,5 +101,4 @@ export async function adminVoidEvent(eventId: string, note?: string) {
     `;
   });
   revalidatePath('/garbage/history');
-  revalidatePath('/garbage/today');
 }
