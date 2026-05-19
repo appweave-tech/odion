@@ -54,7 +54,7 @@ export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas
             onPicked={(v) => setVillaState({ id: v.id, label: v.label })}
             trigger={<Button variant="outline">Change villa</Button>}
           />
-          <Button variant="ghost" onClick={reset} disabled={!villa}>
+          <Button variant="outline" onClick={reset} disabled={!villa}>
             Clear
           </Button>
         </div>
@@ -76,11 +76,13 @@ export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas
         </p>
       </section>
 
-      <section className="text-sm">
-        <a className="underline" href="/garbage/admin">
-          Admin →
-        </a>
-      </section>
+      <a
+        href="/garbage/admin"
+        className="rounded-2xl border bg-card p-5 min-h-tap flex items-center justify-between active:bg-accent text-sm"
+      >
+        <span className="font-medium">Admin</span>
+        <span aria-hidden className="text-muted-foreground">→</span>
+      </a>
     </div>
   );
 }
