@@ -94,6 +94,7 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
         <Button
           size="lg"
           variant="destructive"
+          aria-pressed={todaySkipped}
           className={cn(
             'w-full h-20 text-lg rounded-2xl',
             todaySkipped &&
@@ -129,6 +130,8 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
                 <li key={d}>
                   <button
                     onClick={() => toggle(d)}
+                    aria-pressed={isSkipped}
+                    aria-label={`${formatISTDate(d)} — currently ${isSkipped ? 'skipped' : 'collected'}, tap to toggle`}
                     className={cn(
                       'w-full flex items-center justify-between rounded-xl border bg-card px-4 py-3 min-h-tap',
                       'active:bg-accent transition',

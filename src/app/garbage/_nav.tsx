@@ -39,6 +39,7 @@ export function GarbageNav() {
               <Link
                 href={t.href}
                 prefetch
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => setOptimistic(t.href)}
                 className={cn(
                   'relative flex flex-col items-center justify-center gap-1 py-2.5 min-h-tap text-[11px] transition-colors',
