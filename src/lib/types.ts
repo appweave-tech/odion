@@ -71,14 +71,20 @@ export type CategoryStat = {
   complaints7: number;
 };
 
-export type LiveIssue = {
+export type CategoryPulse = {
   category: string;
   label: string;
   emoji: string | null;
   color: string | null;
-  recent_count: number;
-  unique_senders: number;
-  last_ts: string;
+  total: number;
+  last30: number;
+  last7: number;
+  // intent-filtered (complaint+question) — the actionable signal for the heat pill
+  pill_count: number;
+  unique_senders_7d: number;
+  last_ts: string | null;
+  // 30 daily counts, oldest first, all intents
+  daily_counts: number[];
 };
 
 export type TrendBucket = {

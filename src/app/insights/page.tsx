@@ -1,24 +1,24 @@
 import Link from 'next/link';
 import {
+  getCategoryPulse,
   getCategoryStats,
   getLastIngest,
-  getLiveIssues,
   getOverallStats,
   getTopContributors,
 } from '@/lib/actions/insights';
 import { FreshnessChip } from './_freshness';
-import { LiveIssuesList } from './_live';
+import { CategoryPulseList } from './_pulse';
 import { AlertOctagon, MessageCircle, Users, Calendar } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function InsightsPage() {
-  const [last, overall, stats, live, contributors] = await Promise.all([
+  const [last, overall, stats, pulse, contributors] = await Promise.all([
     getLastIngest(),
     getOverallStats(),
     getCategoryStats(),
-    getLiveIssues(),
+    getCategoryPulse(),
     getTopContributors(8),
   ]);
 
@@ -36,6 +36,7 @@ export default async function InsightsPage() {
 
   const totalLast7 = stats.reduce((s, c) => s + c.last7, 0);
   const complaintsLast7 = stats.reduce((s, c) => s + c.complaints7, 0);
+  const liveIssueCount = pulse.filter((c) => c.pill_count > 0).length;
 
   return (
     <main className="p-5 grid gap-6 max-w-4xl mx-auto pb-16">
@@ -57,7 +58,7 @@ export default async function InsightsPage() {
         <Tile
           icon={<AlertOctagon className="size-4" />}
           label="Live issues (7d)"
-          value={live.length}
+          value={liveIssueCount}
           accent="destructive"
         />
         <Tile
@@ -78,41 +79,16 @@ export default async function InsightsPage() {
         />
       </section>
 
-      <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-medium text-base">Issues raising heat</h2>
-          <span className="text-xs text-muted-foreground shrink-0">7d · ≥ 2 residents</span>
+      <section className="grid gap-2.5">
+        <div className="flex items-baseline justify-between gap-2 px-1">
+          <h2 className="font-medium text-base">Community pulse</h2>
+          <span className="text-xs text-muted-foreground shrink-0">7d heat · 30d trend</span>
         </div>
-        <LiveIssuesList items={live} />
-      </section>
-
-      <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-medium text-base">Category breakdown</h2>
-          <span className="text-xs text-muted-foreground shrink-0">All time</span>
-        </div>
-        <ul className="grid gap-3">
-          {stats
-            .filter((s) => s.total > 0)
-            .sort((a, b) => b.total - a.total)
-            .map((s) => (
-              <li key={s.category} className="grid gap-1.5">
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span aria-hidden>{s.emoji}</span>
-                    <span className="font-medium truncate">{s.label}</span>
-                  </span>
-                  <span className="tabular-nums text-muted-foreground shrink-0">
-                    {s.total.toLocaleString('en-IN')}
-                    {s.last7 > 0 && (
-                      <span className="ml-2 text-foreground">+{s.last7}</span>
-                    )}
-                  </span>
-                </div>
-                <Bar pct={s.total / Math.max(1, stats[0]?.total ?? 1)} color={s.color ?? '#94a3b8'} />
-              </li>
-            ))}
-        </ul>
+        <p className="text-xs text-muted-foreground px-1 -mt-1">
+          Sorted by this week&apos;s heat. Sparkline shows daily messages over the last 30 days; lifetime
+          total in grey. Quiet categories appear muted.
+        </p>
+        <CategoryPulseList items={pulse} />
       </section>
 
       <section className="rounded-2xl border bg-card p-4 sm:p-5 grid gap-3">

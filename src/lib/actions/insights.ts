@@ -5,9 +5,9 @@ import { requireAdmin } from '@/lib/actions/admin';
 import { parseWhatsAppChat, type ParsedMessage } from '@/lib/parse/whatsapp';
 import { classify } from '@/lib/classify/insights';
 import type {
+  CategoryPulse,
   CategoryStat,
   InsightsIngest,
-  LiveIssue,
 } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import JSZip from 'jszip';
@@ -241,33 +241,85 @@ export async function getCategoryStats(): Promise<CategoryStat[]> {
   `;
 }
 
-export async function getLiveIssues(): Promise<LiveIssue[]> {
-  // Bodies are intentionally not selected — RSC payload would leak raw chat text
-  // even when the UI doesn't render it. See audit finding.
-  return sql()<LiveIssue[]>`
-    SELECT c.key       AS category,
-           c.label     AS label,
-           c.emoji     AS emoji,
-           c.color     AS color,
-           agg.recent_count::int   AS recent_count,
-           agg.unique_senders::int AS unique_senders,
-           agg.last_ts             AS last_ts
-      FROM (
+type CategoryAggRow = Omit<CategoryPulse, 'daily_counts'>;
+type DailyRow = { category: string; day: string; n: number };
+
+export async function getCategoryPulse(): Promise<CategoryPulse[]> {
+  // Per-category aggregates. "pill_count" mirrors the prior live-issues filter
+  // (complaint+question, last 7d) so the heat pill stays an actionable signal.
+  // "last7" stays total weekly volume so the delta line tells the broader story.
+  const agg = await sql()<CategoryAggRow[]>`
+    SELECT c.key   AS category,
+           c.label AS label,
+           c.emoji AS emoji,
+           c.color AS color,
+           COALESCE(t.total, 0)::int             AS total,
+           COALESCE(t.last30, 0)::int            AS last30,
+           COALESCE(t.last7, 0)::int             AS last7,
+           COALESCE(t.pill_count, 0)::int        AS pill_count,
+           COALESCE(t.unique_senders_7d, 0)::int AS unique_senders_7d,
+           t.last_ts                             AS last_ts
+      FROM odion.insights_categories c
+      LEFT JOIN (
         SELECT category,
-               COUNT(*)                                  AS recent_count,
-               COUNT(DISTINCT sender)                    AS unique_senders,
-               MAX(ts)                                   AS last_ts
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE ts > now() - interval '30 days') AS last30,
+               COUNT(*) FILTER (WHERE ts > now() - interval '7 days')  AS last7,
+               COUNT(*) FILTER (
+                 WHERE ts > now() - interval '7 days'
+                   AND intent IN ('complaint', 'question')
+               ) AS pill_count,
+               COUNT(DISTINCT sender) FILTER (
+                 WHERE ts > now() - interval '7 days'
+                   AND intent IN ('complaint', 'question')
+               ) AS unique_senders_7d,
+               MAX(ts) FILTER (
+                 WHERE ts > now() - interval '7 days'
+                   AND intent IN ('complaint', 'question')
+               ) AS last_ts
           FROM odion.insights_messages
-         WHERE ts > now() - interval '7 days'
-           AND category IS NOT NULL
-           AND category <> 'community'
-           AND intent IN ('complaint', 'question')
+         WHERE category IS NOT NULL
          GROUP BY category
-        HAVING COUNT(DISTINCT sender) >= 2
-      ) agg
-      JOIN odion.insights_categories c ON c.key = agg.category
-     ORDER BY agg.recent_count DESC, c.display_order
+      ) t ON t.category = c.key
+     WHERE c.key <> 'community'
+     ORDER BY c.display_order
   `;
+
+  const daily = await sql()<DailyRow[]>`
+    SELECT category,
+           to_char(date_trunc('day', ts), 'YYYY-MM-DD') AS day,
+           COUNT(*)::int                                AS n
+      FROM odion.insights_messages
+     WHERE ts > now() - interval '30 days'
+       AND category IS NOT NULL
+       AND category <> 'community'
+     GROUP BY category, day
+  `;
+
+  const dayKeys: string[] = [];
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    dayKeys.push(d.toISOString().slice(0, 10));
+  }
+  const dayIndex: Record<string, number> = {};
+  dayKeys.forEach((k, i) => (dayIndex[k] = i));
+
+  const series: Record<string, number[]> = {};
+  for (const row of agg) series[row.category] = Array(30).fill(0);
+  for (const r of daily) {
+    const arr = series[r.category];
+    if (!arr) continue;
+    const idx = dayIndex[r.day];
+    if (idx === undefined) continue;
+    arr[idx] = r.n;
+  }
+
+  return agg
+    .filter((a) => a.total > 0)
+    .map((a) => ({ ...a, daily_counts: series[a.category] ?? Array(30).fill(0) }));
 }
 
 export async function getTopContributors(limit = 8): Promise<{ sender: string; count: number }[]> {
