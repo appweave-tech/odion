@@ -1,7 +1,13 @@
 'use server';
 
 import { sql } from '@/lib/db';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
+
+// Skip events change every time a resident taps Mark/Unmark. 30s cache is the
+// sweet spot — short enough that the home-page "skips today" counter is fresh,
+// long enough to absorb burst traffic. Mutations call revalidateTag(SKIPS_TAG).
+const SKIPS_TAG = 'skips';
+const SKIPS_TODAY_REVALIDATE_S = 30;
 import { cookies } from 'next/headers';
 import { getClientMeta } from '@/lib/request';
 import { todayIST, daysAgoIST } from '@/lib/utils';
@@ -90,6 +96,7 @@ export async function markSkip(input: {
   }
   revalidatePath('/garbage');
   revalidatePath('/garbage/history');
+  revalidateTag(SKIPS_TAG);
 }
 
 export async function unmarkSkip(input: { villaId: string; date: string }) {
@@ -116,21 +123,27 @@ export async function unmarkSkip(input: { villaId: string; date: string }) {
   `;
   revalidatePath('/garbage');
   revalidatePath('/garbage/history');
+  revalidateTag(SKIPS_TAG);
 }
 
+const _listTodaySkipsCached = unstable_cache(
+  async (date: string): Promise<SkipEventWithVilla[]> =>
+    sql()<SkipEventWithVilla[]>`
+      SELECT e.id, e.villa_id, e.skip_date::text AS skip_date, e.reported_by_device, e.note,
+             e.supersedes_event_id, e.void, e.created_at,
+             v.phase AS villa_phase, v.number AS villa_number, v.label AS villa_label,
+             d.name AS reporter_name
+      FROM odion.garbage_skip_events_current e
+      JOIN odion.villas v ON v.id = e.villa_id
+      LEFT JOIN odion.devices d ON d.id = e.reported_by_device
+      WHERE e.skip_date = ${date} AND e.void = false
+      ORDER BY v.phase, v.number
+    `,
+  ['skip:today:v1'],
+  { revalidate: SKIPS_TODAY_REVALIDATE_S, tags: [SKIPS_TAG] },
+);
 export async function listTodaySkips(): Promise<SkipEventWithVilla[]> {
-  const date = todayIST();
-  return sql()<SkipEventWithVilla[]>`
-    SELECT e.id, e.villa_id, e.skip_date::text AS skip_date, e.reported_by_device, e.note,
-           e.supersedes_event_id, e.void, e.created_at,
-           v.phase AS villa_phase, v.number AS villa_number, v.label AS villa_label,
-           d.name AS reporter_name
-    FROM odion.garbage_skip_events_current e
-    JOIN odion.villas v ON v.id = e.villa_id
-    LEFT JOIN odion.devices d ON d.id = e.reported_by_device
-    WHERE e.skip_date = ${date} AND e.void = false
-    ORDER BY v.phase, v.number
-  `;
+  return _listTodaySkipsCached(todayIST());
 }
 
 export async function listSkipsLastNDays(n: number): Promise<SkipEventWithVilla[]> {

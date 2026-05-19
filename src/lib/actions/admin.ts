@@ -2,7 +2,7 @@
 
 import { sql } from '@/lib/db';
 import { cookies } from 'next/headers';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { getClientMeta } from '@/lib/request';
 import { signSession, verifySession } from '@/lib/admin-session';
 import crypto from 'node:crypto';
@@ -52,6 +52,7 @@ export async function adminVerifyVilla(villaId: string) {
     `;
   });
   revalidatePath('/garbage/admin/villas');
+  revalidateTag('villas');
 }
 
 // Soft delete — sets deleted_at, preserves the villa row + all its skip events.
@@ -67,6 +68,7 @@ export async function adminDeleteVilla(villaId: string) {
     `;
   });
   revalidatePath('/garbage/admin/villas');
+  revalidateTag('villas');
 }
 
 export async function adminRestoreVilla(villaId: string) {
@@ -80,6 +82,7 @@ export async function adminRestoreVilla(villaId: string) {
     `;
   });
   revalidatePath('/garbage/admin/villas');
+  revalidateTag('villas');
 }
 
 export async function adminVoidEvent(eventId: string, note?: string) {
@@ -101,4 +104,5 @@ export async function adminVoidEvent(eventId: string, note?: string) {
     `;
   });
   revalidatePath('/garbage/history');
+  revalidateTag('skips');
 }

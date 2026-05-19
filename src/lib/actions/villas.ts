@@ -2,7 +2,13 @@
 
 import { sql } from '@/lib/db';
 import { cookies } from 'next/headers';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
+
+// Villa list barely changes — admin verifies/deletes/restores happen rarely,
+// and findOrCreateVilla auto-creates handful per week. 5min cache is safe;
+// mutations call revalidateTag(VILLAS_TAG) to bust it on demand.
+const VILLAS_TAG = 'villas';
+const VILLAS_REVALIDATE_S = 300;
 import { getClientMeta } from '@/lib/request';
 import type { Villa } from '@/lib/types';
 
@@ -18,17 +24,24 @@ function phaseRank(p: string): number {
   return i === -1 ? 999 : i;
 }
 
+const _listVillasCached = unstable_cache(
+  async (): Promise<Villa[]> => {
+    const rows = await sql()<Villa[]>`
+      SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
+      FROM odion.villas
+      WHERE deleted_at IS NULL
+      ORDER BY phase, number
+    `;
+    return [...rows].sort((a, b) => {
+      const r = phaseRank(a.phase) - phaseRank(b.phase);
+      return r !== 0 ? r : a.number - b.number;
+    });
+  },
+  ['villas:list:v1'],
+  { revalidate: VILLAS_REVALIDATE_S, tags: [VILLAS_TAG] },
+);
 export async function listVillas(): Promise<Villa[]> {
-  const rows = await sql()<Villa[]>`
-    SELECT id, phase, number, label, display_order, auto_created, verified, created_at, deleted_at
-    FROM odion.villas
-    WHERE deleted_at IS NULL
-    ORDER BY phase, number
-  `;
-  return [...rows].sort((a, b) => {
-    const r = phaseRank(a.phase) - phaseRank(b.phase);
-    return r !== 0 ? r : a.number - b.number;
-  });
+  return _listVillasCached();
 }
 
 // Admin-only: includes soft-deleted villas so they can be restored.
@@ -44,17 +57,24 @@ export async function listVillasIncludingDeleted(): Promise<Villa[]> {
   });
 }
 
+const _listPhasesCached = unstable_cache(
+  async (): Promise<{ phase: string; count: number }[]> => {
+    const rows = await sql()<{ phase: string; count: string }[]>`
+      SELECT phase, COUNT(*) AS count
+      FROM odion.villas
+      WHERE deleted_at IS NULL
+      GROUP BY phase
+      ORDER BY phase
+    `;
+    return rows
+      .map((r) => ({ phase: r.phase, count: Number(r.count) }))
+      .sort((a, b) => phaseRank(a.phase) - phaseRank(b.phase));
+  },
+  ['villas:phases:v1'],
+  { revalidate: VILLAS_REVALIDATE_S, tags: [VILLAS_TAG] },
+);
 export async function listPhases(): Promise<{ phase: string; count: number }[]> {
-  const rows = await sql()<{ phase: string; count: string }[]>`
-    SELECT phase, COUNT(*) AS count
-    FROM odion.villas
-    WHERE deleted_at IS NULL
-    GROUP BY phase
-    ORDER BY phase
-  `;
-  return rows
-    .map((r) => ({ phase: r.phase, count: Number(r.count) }))
-    .sort((a, b) => phaseRank(a.phase) - phaseRank(b.phase));
+  return _listPhasesCached();
 }
 
 export async function listVillasInPhase(phase: string): Promise<Villa[]> {
@@ -89,6 +109,7 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
     if (villa.deleted_at) {
       await sql()`UPDATE odion.villas SET deleted_at = NULL WHERE id = ${villa.id}`;
       revalidatePath('/garbage/admin/villas');
+      revalidateTag(VILLAS_TAG);
       return { ...villa, deleted_at: null };
     }
     return villa;
@@ -119,6 +140,7 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
   `;
   revalidatePath('/garbage');
   revalidatePath('/garbage/admin/villas');
+  revalidateTag(VILLAS_TAG);
   return inserted[0];
 }
 
