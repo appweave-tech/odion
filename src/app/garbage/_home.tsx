@@ -54,24 +54,26 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
 
   function toggle(date: string) {
     const wasSkipped = skipped.has(date);
-    // optimistic
+    // Optimistic state + optimistic toast. The toast fires immediately on tap
+    // so the resident feels the response in <16ms; the server call happens in
+    // the background and only surfaces if it fails.
     setSkipped((s) => {
       const n = new Set(s);
       if (wasSkipped) n.delete(date);
       else n.add(date);
       return n;
     });
+    let toastId: string | number | undefined;
+    if (date === today) {
+      toastId = wasSkipped ? toast.success('Unmarked') : toast.success('Marked skipped for today');
+    }
     setPending(async () => {
       try {
-        if (wasSkipped) {
-          await unmarkSkip({ villaId, date });
-          if (date === today) toast.success('Unmarked');
-        } else {
-          await markSkip({ villaId, date });
-          if (date === today) toast.success('Marked skipped for today');
-        }
+        if (wasSkipped) await unmarkSkip({ villaId, date });
+        else await markSkip({ villaId, date });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Could not update';
+        if (toastId !== undefined) toast.dismiss(toastId);
         toast.error(msg);
         console.error(e);
         await refresh();

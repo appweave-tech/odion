@@ -2,7 +2,9 @@ import { listSkipsLastNDays } from '@/lib/actions/skip';
 import { SkipBarChart } from '@/components/SkipBarChart';
 import { SkipsByDate } from '@/components/SkipsByDate';
 
-export const dynamic = 'force-dynamic';
+// ISR: re-render at most once every 60s. Heatmap aggregates last 30 days of
+// skips; 60s stale is fine for the resident scan and slashes TTFB by skipping
+// the postgres round-trip on hot views.
 export const revalidate = 60;
 
 export default async function HistoryPage() {

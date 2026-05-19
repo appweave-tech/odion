@@ -9,7 +9,12 @@ import type {
   CategoryStat,
   InsightsIngest,
 } from '@/lib/types';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
+
+// Cache tag used by all /insights read paths. Mutations (ingest, reclassify)
+// call revalidateTag(INSIGHTS_TAG) to bust the in-memory cache instantly.
+const INSIGHTS_TAG = 'insights';
+const INSIGHTS_REVALIDATE_S = 60;
 import JSZip from 'jszip';
 
 // Cap on zipped + unzipped content. The 10mb body limit (next.config.mjs) bounds upload;
@@ -94,6 +99,7 @@ export async function ingestChatExport(formData: FormData): Promise<{
 
   revalidatePath('/insights');
   revalidatePath('/insights/admin');
+  revalidateTag(INSIGHTS_TAG);
 
   return {
     ingest_id: result.ingest_id,
@@ -215,36 +221,51 @@ export async function getRecentIngests(limit = 10): Promise<InsightsIngest[]> {
   `;
 }
 
+const _getCategoryStatsCached = unstable_cache(
+  async (): Promise<CategoryStat[]> =>
+    sql()<CategoryStat[]>`
+      SELECT c.key      AS category,
+             c.label    AS label,
+             c.emoji    AS emoji,
+             c.color    AS color,
+             COALESCE(t.total, 0)::int       AS total,
+             COALESCE(t.last30, 0)::int      AS last30,
+             COALESCE(t.last7, 0)::int       AS last7,
+             COALESCE(t.complaints7, 0)::int AS complaints7
+        FROM odion.insights_categories c
+        LEFT JOIN (
+          SELECT category,
+                 COUNT(*)                                                       AS total,
+                 COUNT(*) FILTER (WHERE ts > now() - interval '30 days')        AS last30,
+                 COUNT(*) FILTER (WHERE ts > now() - interval '7 days')         AS last7,
+                 COUNT(*) FILTER (WHERE ts > now() - interval '7 days'
+                                    AND intent = 'complaint')                   AS complaints7
+            FROM odion.insights_messages
+           WHERE category IS NOT NULL
+           GROUP BY category
+        ) t ON t.category = c.key
+       ORDER BY c.display_order
+    `,
+  ['insights:categoryStats:v1'],
+  { revalidate: INSIGHTS_REVALIDATE_S, tags: [INSIGHTS_TAG] },
+);
 export async function getCategoryStats(): Promise<CategoryStat[]> {
-  return sql()<CategoryStat[]>`
-    SELECT c.key      AS category,
-           c.label    AS label,
-           c.emoji    AS emoji,
-           c.color    AS color,
-           COALESCE(t.total, 0)::int       AS total,
-           COALESCE(t.last30, 0)::int      AS last30,
-           COALESCE(t.last7, 0)::int       AS last7,
-           COALESCE(t.complaints7, 0)::int AS complaints7
-      FROM odion.insights_categories c
-      LEFT JOIN (
-        SELECT category,
-               COUNT(*)                                                       AS total,
-               COUNT(*) FILTER (WHERE ts > now() - interval '30 days')        AS last30,
-               COUNT(*) FILTER (WHERE ts > now() - interval '7 days')         AS last7,
-               COUNT(*) FILTER (WHERE ts > now() - interval '7 days'
-                                  AND intent = 'complaint')                   AS complaints7
-          FROM odion.insights_messages
-         WHERE category IS NOT NULL
-         GROUP BY category
-      ) t ON t.category = c.key
-     ORDER BY c.display_order
-  `;
+  return _getCategoryStatsCached();
 }
 
 type CategoryAggRow = Omit<CategoryPulse, 'daily_counts'>;
 type DailyRow = { category: string; day: string; n: number };
 
+const _getCategoryPulseCached = unstable_cache(
+  _getCategoryPulseImpl,
+  ['insights:categoryPulse:v1'],
+  { revalidate: INSIGHTS_REVALIDATE_S, tags: [INSIGHTS_TAG] },
+);
 export async function getCategoryPulse(): Promise<CategoryPulse[]> {
+  return _getCategoryPulseCached();
+}
+
+async function _getCategoryPulseImpl(): Promise<CategoryPulse[]> {
   // Per-category aggregates. "pill_count" mirrors the prior live-issues filter
   // (complaint+question, last 7d) so the heat pill stays an actionable signal.
   // "last7" stays total weekly volume so the delta line tells the broader story.
@@ -322,25 +343,41 @@ export async function getCategoryPulse(): Promise<CategoryPulse[]> {
     .map((a) => ({ ...a, daily_counts: series[a.category] ?? Array(30).fill(0) }));
 }
 
+const _getTopContributorsCached = unstable_cache(
+  async (limit: number) =>
+    sql()<{ sender: string; count: number }[]>`
+      SELECT sender, COUNT(*)::int AS count
+        FROM odion.insights_messages
+       WHERE ts > now() - interval '30 days'
+       GROUP BY sender
+       ORDER BY count DESC
+       LIMIT ${limit}
+    `,
+  ['insights:topContributors:v1'],
+  { revalidate: INSIGHTS_REVALIDATE_S, tags: [INSIGHTS_TAG] },
+);
 export async function getTopContributors(limit = 8): Promise<{ sender: string; count: number }[]> {
-  return sql()<{ sender: string; count: number }[]>`
-    SELECT sender, COUNT(*)::int AS count
-      FROM odion.insights_messages
-     WHERE ts > now() - interval '30 days'
-     GROUP BY sender
-     ORDER BY count DESC
-     LIMIT ${limit}
-  `;
+  return _getTopContributorsCached(limit);
 }
 
-export async function getOverallStats(): Promise<{
+type OverallStats = {
   total_messages: number;
   unique_senders: number;
   unique_senders_30d: number;
   first_ts: string | null;
   last_ts: string | null;
   classified: number;
-}> {
+};
+const _getOverallStatsCached = unstable_cache(
+  _getOverallStatsImpl,
+  ['insights:overallStats:v1'],
+  { revalidate: INSIGHTS_REVALIDATE_S, tags: [INSIGHTS_TAG] },
+);
+export async function getOverallStats(): Promise<OverallStats> {
+  return _getOverallStatsCached();
+}
+
+async function _getOverallStatsImpl(): Promise<OverallStats> {
   const [row] = await sql()<{
     total_messages: string;
     unique_senders: string;

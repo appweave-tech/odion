@@ -4,7 +4,10 @@ import { formatISTDate } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 import type { Villa } from '@/lib/types';
 
-export const dynamic = 'force-dynamic';
+// ISR: per-villa view caches for 60s. A resident who just marked a skip will
+// see it on the home page immediately; this page is the public/heatmap view
+// where 60s lag is acceptable in exchange for a near-instant TTFB.
+export const revalidate = 60;
 
 const LABEL_RE = /^[A-Z0-9]{1,8}-\d{1,4}$/;
 
