@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { markSkip, unmarkSkip, getVillaSkipDates } from '@/lib/actions/skip';
 import { toast } from 'sonner';
 import { todayIST, formatISTDate, daysAgoIST, cn } from '@/lib/utils';
-import { Trash2, AlertTriangle, Check, X } from 'lucide-react';
+import { Flag, Check, X } from 'lucide-react';
 import type { Villa } from '@/lib/types';
 
 type Phase = { phase: string; count: number };
@@ -104,11 +104,11 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
         >
           {todaySkipped ? (
             <>
-              <AlertTriangle className="size-6" /> Skipped today
+              <Flag className="size-6 fill-current" /> Skipped today
             </>
           ) : (
             <>
-              <Trash2 className="size-6" /> Mark today as skipped
+              <Flag className="size-6" /> Mark today as skipped
             </>
           )}
         </Button>
