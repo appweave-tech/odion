@@ -1,5 +1,6 @@
 import { listSkipsLastNDays } from '@/lib/actions/skip';
 import { SkipBarChart } from '@/components/SkipBarChart';
+import { SkipsByDate } from '@/components/SkipsByDate';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -23,6 +24,8 @@ export default async function HistoryPage() {
       <section className="rounded-2xl border bg-card p-4">
         <SkipBarChart byDate={byDate} days={30} />
       </section>
+
+      <SkipsByDate skips={skips} days={30} />
     </div>
   );
 }
