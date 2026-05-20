@@ -12,6 +12,8 @@ export function PhaseStep({
   villasInPhase,
   phase,
   number,
+  loadingPhases,
+  loadingVillas,
   onPhaseChange,
   onNumberChange,
   onContinue,
@@ -21,6 +23,8 @@ export function PhaseStep({
   villasInPhase: Villa[];
   phase: string;
   number: string;
+  loadingPhases?: boolean;
+  loadingVillas?: boolean;
   onPhaseChange: (p: string) => void;
   onNumberChange: (n: string) => void;
   onContinue: () => void;
@@ -31,8 +35,12 @@ export function PhaseStep({
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
           <span className="text-sm text-muted-foreground">Phase</span>
-          <NativeSelect value={phase} onChange={(e) => onPhaseChange(e.target.value)}>
-            <option value="">— Select —</option>
+          <NativeSelect
+            value={phase}
+            onChange={(e) => onPhaseChange(e.target.value)}
+            disabled={loadingPhases}
+          >
+            <option value="">{loadingPhases ? 'Loading…' : '— Select —'}</option>
             {phases.map((p) => (
               <option key={p.phase} value={p.phase}>
                 {p.phase}
@@ -45,9 +53,11 @@ export function PhaseStep({
           <NativeSelect
             value={number}
             onChange={(e) => onNumberChange(e.target.value)}
-            disabled={!phase}
+            disabled={!phase || loadingVillas}
           >
-            <option value="">— Select —</option>
+            <option value="">
+              {!phase ? '— Select —' : loadingVillas ? 'Loading…' : '— Select —'}
+            </option>
             {villasInPhase.map((v) => (
               <option key={v.id} value={String(v.number)}>
                 {v.number}
@@ -56,7 +66,7 @@ export function PhaseStep({
           </NativeSelect>
         </label>
       </div>
-      <Button size="lg" onClick={onContinue} disabled={!phase || !number}>
+      <Button size="lg" onClick={onContinue} disabled={!phase || !number || loadingVillas}>
         Continue
       </Button>
       <button

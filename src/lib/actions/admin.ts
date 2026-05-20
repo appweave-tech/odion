@@ -9,13 +9,23 @@ import crypto from 'node:crypto';
 
 const ADMIN_COOKIE = 'odion-admin';
 
+// Slows brute force to ~1 attempt/sec/request without holding open
+// connections or relying on external state. The 22-char passcode is already
+// brute-resistant; this is belt-and-braces + a forensic console line.
+async function rejectAfterDelay(reason: string): Promise<false> {
+  const { ip } = getClientMeta();
+  console.warn(`[admin] login rejected (${reason}) from ip=${ip ?? 'unknown'}`);
+  await new Promise((r) => setTimeout(r, 1000));
+  return false;
+}
+
 export async function adminLogin(passcode: string): Promise<boolean> {
   const expected = process.env.ADMIN_PASSCODE;
   if (!expected) throw new Error('ADMIN_PASSCODE not configured');
   const a = Buffer.from(passcode, 'utf8');
   const b = Buffer.from(expected, 'utf8');
-  if (a.length !== b.length) return false;
-  if (!crypto.timingSafeEqual(a, b)) return false;
+  if (a.length !== b.length) return rejectAfterDelay('length-mismatch');
+  if (!crypto.timingSafeEqual(a, b)) return rejectAfterDelay('hmac-mismatch');
   cookies().set(ADMIN_COOKIE, signSession(), {
     httpOnly: true,
     sameSite: 'lax',

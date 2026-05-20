@@ -7,11 +7,7 @@ import { VillaPicker } from '@/components/VillaPicker';
 import { getName, setName, getVilla, clearVilla } from '@/lib/device';
 import { toast } from 'sonner';
 
-import type { Villa } from '@/lib/types';
-
-type Phase = { phase: string; count: number };
-
-export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas: Villa[] }) {
+export function SettingsView() {
   const [villa, setVillaState] = React.useState<{ id: string; label: string } | null>(null);
   const [name, setNameInput] = React.useState('');
   const [hydrated, setHydrated] = React.useState(false);
@@ -49,8 +45,6 @@ export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas
         </div>
         <div className="grid grid-cols-2 gap-2">
           <VillaPicker
-            phases={phases}
-            allVillas={allVillas}
             onPicked={(v) => setVillaState({ id: v.id, label: v.label })}
             trigger={<Button variant="outline">Change villa</Button>}
           />

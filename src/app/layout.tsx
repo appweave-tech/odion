@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, JetBrains_Mono, Fraunces } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import './globals.css';
 
 // Plus Jakarta Sans — humanist, friendly, distinctive without being weird.
 // JetBrains Mono — for the WhatsApp digest preformatted block.
+// Fraunces (display serif) is loaded only inside /insights to keep /garbage
+// pages from shipping a font they never render.
 const sans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   display: 'swap',
@@ -14,14 +17,6 @@ const mono = JetBrains_Mono({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-mono',
-});
-// Fraunces — warm serif used for display copy on /insights (Pulse Feed aesthetic).
-const display = Fraunces({
-  subsets: ['latin'],
-  display: 'swap',
-  weight: ['500', '700', '900'],
-  style: ['normal', 'italic'],
-  variable: '--font-display',
 });
 
 export const metadata: Metadata = {
@@ -42,17 +37,26 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // Pinch-zoom intentionally allowed (WCAG 1.4.4). Residents zoom into the
+  // heatmap and date chips, especially older users on smaller phones.
   viewportFit: 'cover',
   themeColor: '#16a34a',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="font-sans">
-        <div className="min-h-dvh flex flex-col">{children}</div>
-        <Toaster position="top-center" />
+        <ConfirmProvider>
+          <div className="min-h-dvh flex flex-col">{children}</div>
+        </ConfirmProvider>
+        {/* bottom-center keeps confirmations close to the tap target on mobile.
+            offset lifts toasts above the 96px-tall sticky bottom nav. */}
+        <Toaster
+          position="bottom-center"
+          offset={112}
+          mobileOffset={112}
+        />
       </body>
     </html>
   );

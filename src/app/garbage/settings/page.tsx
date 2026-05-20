@@ -1,10 +1,9 @@
-import { listPhases, listVillas } from '@/lib/actions/villas';
 import { SettingsView } from './_view';
 
-// ISR: villa list + phases barely change. 5-minute cache is plenty.
+// Settings is a thin shell — the picker now fetches its own data lazily,
+// so the page doesn't need to pre-fetch phases/villas anymore.
 export const revalidate = 300;
 
-export default async function SettingsPage() {
-  const [phases, allVillas] = await Promise.all([listPhases(), listVillas()]);
-  return <SettingsView phases={phases} allVillas={allVillas} />;
+export default function SettingsPage() {
+  return <SettingsView />;
 }

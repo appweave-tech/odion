@@ -57,6 +57,40 @@ export async function listVillasIncludingDeleted(): Promise<Villa[]> {
   });
 }
 
+// Cheap count for the welcome card. Keeps the first-paint payload tiny so
+// /garbage can render with a single COUNT(*) instead of hauling the full
+// villa list every visit.
+const _villaCountCached = unstable_cache(
+  async (): Promise<number> => {
+    const [row] = await sql()<{ c: string }[]>`
+      SELECT COUNT(*)::text AS c FROM odion.villas WHERE deleted_at IS NULL
+    `;
+    return Number(row.c);
+  },
+  ['villas:count:v1'],
+  { revalidate: VILLAS_REVALIDATE_S, tags: [VILLAS_TAG] },
+);
+export async function getVillaCount(): Promise<number> {
+  return _villaCountCached();
+}
+
+// Resolves the device's claimed villa via the httpOnly cookie. Returns null
+// if the device hasn't claimed one yet (or no cookie was set). Used by
+// /garbage to render the villa view server-side instead of waiting for a
+// client-side localStorage hydration round-trip.
+export async function getClaimedVilla(): Promise<{ id: string; label: string } | null> {
+  const deviceId = cookies().get('odion-device')?.value;
+  if (!deviceId) return null;
+  const rows = await sql()<{ id: string; label: string }[]>`
+    SELECT v.id, v.label
+    FROM odion.devices d
+    JOIN odion.villas v ON v.id = d.villa_id
+    WHERE d.id = ${deviceId} AND v.deleted_at IS NULL
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
 const _listPhasesCached = unstable_cache(
   async (): Promise<{ phase: string; count: number }[]> => {
     const rows = await sql()<{ phase: string; count: string }[]>`

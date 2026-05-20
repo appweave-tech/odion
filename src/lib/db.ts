@@ -8,20 +8,24 @@ if (!url && process.env.NODE_ENV !== 'production') {
   console.warn('[db] DATABASE_URL not set — see ~/work/appweave/ops-suite/apps/portal/.env.local');
 }
 
-let _sql: ReturnType<typeof postgres> | null = null;
+// Stash the pool on globalThis so Next dev HMR and warm serverless instances
+// reuse it across module re-evals. Each serverless instance still gets its own
+// pool — keep `max` small (Supabase pooler has a per-project connection cap).
+type PgClient = ReturnType<typeof postgres>;
+const globalForDb = globalThis as unknown as { _odionSql?: PgClient };
 
-export function sql() {
+export function sql(): PgClient {
   if (!url) throw new Error('DATABASE_URL not set');
-  if (!_sql) {
-    _sql = postgres(url, {
-      max: 5,
+  if (!globalForDb._odionSql) {
+    globalForDb._odionSql = postgres(url, {
+      max: 2,
       idle_timeout: 20,
       prepare: false,
       ssl: 'require',
       connection: { search_path: `${schema}, public` },
     });
   }
-  return _sql;
+  return globalForDb._odionSql;
 }
 
 export const SCHEMA = schema;

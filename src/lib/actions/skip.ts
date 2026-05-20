@@ -10,7 +10,7 @@ const SKIPS_TAG = 'skips';
 const SKIPS_TODAY_REVALIDATE_S = 30;
 import { cookies } from 'next/headers';
 import { getClientMeta } from '@/lib/request';
-import { todayIST, daysAgoIST } from '@/lib/utils';
+import { todayIST, daysAgoIST, EDIT_WINDOW_DAYS } from '@/lib/utils';
 import type { SkipEventWithVilla } from '@/lib/types';
 
 function requireDeviceCookie(): string {
@@ -29,7 +29,21 @@ async function assertDeviceOwnsVilla(deviceId: string, villaId: string) {
   }
 }
 
-const EDIT_WINDOW_DAYS = 3;
+// Rate limit: at most SKIP_BURST writes per device per 60s window. Uses the
+// existing gse_device_created_idx so the count is a cheap index range scan.
+const SKIP_BURST = 30;
+async function assertSkipRateLimit(deviceId: string) {
+  const [row] = await sql()<{ recent: string }[]>`
+    SELECT COUNT(*)::text AS recent
+    FROM odion.garbage_skip_events
+    WHERE reported_by_device = ${deviceId}
+      AND created_at > now() - interval '60 seconds'
+  `;
+  if (Number(row.recent) >= SKIP_BURST) {
+    throw new Error('Too many updates — slow down for a minute');
+  }
+}
+
 
 export type CurrentSkipForVilla = {
   skip_date: string;
@@ -48,6 +62,7 @@ export async function markSkip(input: {
   if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
     throw new Error('Edit window exceeded — ask admin');
   }
+  await assertSkipRateLimit(deviceId);
   await assertDeviceOwnsVilla(deviceId, villaId);
 
   const { ip, ua } = getClientMeta();
@@ -106,6 +121,7 @@ export async function unmarkSkip(input: { villaId: string; date: string }) {
   if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
     throw new Error('Edit window exceeded — ask admin');
   }
+  await assertSkipRateLimit(deviceId);
   await assertDeviceOwnsVilla(deviceId, villaId);
 
   const existing = await sql()<{ id: string }[]>`
@@ -161,14 +177,24 @@ export async function listSkipsLastNDays(n: number): Promise<SkipEventWithVilla[
   `;
 }
 
+// Cached per (villa, today, window). The cache key is the day boundary, not
+// the timestamp, so the entry naturally refreshes once per IST day. Mutations
+// (markSkip / unmarkSkip) invalidate via revalidateTag(SKIPS_TAG).
+const _getVillaSkipDatesCached = unstable_cache(
+  async (villaId: string, today: string, daysBack: number): Promise<string[]> => {
+    const from = daysAgoIST(daysBack);
+    const rows = await sql()<{ skip_date: string }[]>`
+      SELECT skip_date::text AS skip_date FROM odion.garbage_skip_events_current
+      WHERE villa_id = ${villaId} AND void = false AND skip_date >= ${from}
+      ORDER BY skip_date DESC
+    `;
+    return rows.map((r) => String(r.skip_date));
+  },
+  ['skip:villa-dates:v1'],
+  { revalidate: SKIPS_TODAY_REVALIDATE_S, tags: [SKIPS_TAG] },
+);
 export async function getVillaSkipDates(villaId: string, daysBack = 365): Promise<string[]> {
-  const from = daysAgoIST(daysBack);
-  const rows = await sql()<{ skip_date: string }[]>`
-    SELECT skip_date::text AS skip_date FROM odion.garbage_skip_events_current
-    WHERE villa_id = ${villaId} AND void = false AND skip_date >= ${from}
-    ORDER BY skip_date DESC
-  `;
-  return rows.map((r) => String(r.skip_date));
+  return _getVillaSkipDatesCached(villaId, todayIST(), daysBack);
 }
 
 export async function getEditWindow(): Promise<{ minDate: string; maxDate: string }> {
