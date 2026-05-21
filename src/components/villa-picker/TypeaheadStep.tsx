@@ -1,15 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import type { Villa } from '@/lib/types';
 
 // Single typeahead replaces the two-dropdown PhaseStep. The full villa list
 // (~115 rows) is ~9KB once fetched — paid once per session, not per render.
 // Filter is case-insensitive, matches anywhere in the label (so "35" finds
 // every P*-35 and "P1" finds every P1-*).
+//
+// Layout note: the results grid is sized to a fixed 42dvh whether empty,
+// loading, or full. Reserving the space keeps the sheet from auto-growing
+// upward when villas finish loading — a tap on the input mid-load would
+// otherwise land on whichever card just slid into that position.
 const MAX_VISIBLE = 30;
 
 export function TypeaheadStep({
@@ -67,33 +70,36 @@ export function TypeaheadStep({
             : `${villas.length} villas — type to filter`}
       </div>
 
-      <ul
-        className={cn(
-          'grid grid-cols-3 gap-2 max-h-[42dvh] overflow-y-auto pr-1',
-          loading && 'opacity-50 pointer-events-none',
-        )}
-        role="listbox"
-        aria-label="Villa matches"
-      >
-        {matches.map((v) => (
-          <li key={v.id}>
-            <button
-              type="button"
-              role="option"
-              aria-selected={false}
-              onClick={() => onSelect(v)}
-              className="w-full min-h-tap rounded-xl border bg-card px-2.5 py-2.5 text-base font-medium tabular-nums active:bg-accent transition"
-            >
-              {v.label}
-            </button>
-          </li>
-        ))}
-        {!loading && matches.length === 0 && (
-          <li className="col-span-3 text-center text-sm text-muted-foreground py-6">
+      {/* Fixed-height results region. The grid always reserves the same
+          vertical space so the sheet doesn't grow upward when villas
+          finish loading and a mid-air tap doesn't land on a card. */}
+      <div className="h-[42dvh] overflow-y-auto pr-1" role="listbox" aria-label="Villa matches">
+        {loading ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            Loading villas…
+          </div>
+        ) : matches.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-center text-sm text-muted-foreground px-4">
             No villa matches "{query}". Try the fallback below.
-          </li>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-3 gap-2">
+            {matches.map((v) => (
+              <li key={v.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => onSelect(v)}
+                  className="w-full min-h-tap rounded-xl border bg-card px-2.5 py-2.5 text-base font-medium tabular-nums active:bg-accent transition"
+                >
+                  {v.label}
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
-      </ul>
+      </div>
 
       <button
         type="button"

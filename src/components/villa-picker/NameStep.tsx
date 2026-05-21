@@ -11,12 +11,17 @@ export function NameStep({
   submitting,
   onNameChange,
   onConfirm,
+  onBack,
 }: {
   villa: Villa;
   name: string;
   submitting: boolean;
   onNameChange: (n: string) => void;
   onConfirm: () => void;
+  // Back to the typeahead step. Clears the pending villa so a mistapped
+  // selection doesn't trap the resident on the Name step with no escape
+  // other than dismissing the whole sheet.
+  onBack: () => void;
 }) {
   return (
     <div className="grid gap-3 pt-2">
@@ -33,6 +38,14 @@ export function NameStep({
       <Button size="lg" disabled={submitting} onClick={onConfirm}>
         {submitting ? 'Saving…' : 'Confirm'}
       </Button>
+      <button
+        type="button"
+        onClick={onBack}
+        disabled={submitting}
+        className="text-sm text-muted-foreground underline-offset-4 hover:underline min-h-10 disabled:opacity-50"
+      >
+        ← Pick a different villa
+      </button>
     </div>
   );
 }

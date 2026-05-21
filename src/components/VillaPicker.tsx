@@ -252,6 +252,7 @@ export function VillaPicker({
             submitting={submitting}
             onNameChange={setNameInput}
             onConfirm={confirmName}
+            onBack={() => patch({ step: 'pick', pendingVilla: null })}
           />
         )}
       </SheetContent>
