@@ -197,8 +197,22 @@ export async function claimVilla(
           last_ip = EXCLUDED.last_ip,
           last_seen = now()
   `;
-  // 'layout' invalidates the layout segment too — the header chip
-  // (getClaimedVilla in garbage/layout's GarbageHeader) is otherwise served
-  // from the cached layout render and stays empty until a hard reload.
+  // 'layout' invalidates the layout segment too so the server-resolved
+  // claimedVilla on /garbage updates on the next navigation, not just the
+  // current refresh. (The header chip is client-side via useVilla() now.)
+  revalidatePath('/garbage', 'layout');
+}
+
+// Drops this device's claim — server-side counterpart to clearVilla() in
+// device.ts. Without this, Settings → Clear only wipes localStorage and the
+// server still resolves the old claim on the next /garbage visit.
+export async function unclaimDevice() {
+  const deviceId = cookies().get('odion-device')?.value;
+  if (!deviceId) return;
+  await sql()`
+    UPDATE odion.devices
+    SET villa_id = NULL, last_seen = now()
+    WHERE id = ${deviceId}
+  `;
   revalidatePath('/garbage', 'layout');
 }

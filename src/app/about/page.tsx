@@ -15,7 +15,7 @@ export default function AboutPage() {
           <em>Odion The Woods of East</em>, Chikkanayakanahalli, Bangalore.
         </p>
         <p>
-          The first module is the <strong>Garbage Tracker</strong> — a way for residents to log when their villa got
+          The first module is the <strong>Garbage Pickup Tracker</strong> — a way for residents to log when their villa got
           skipped by the BBMP van, so the RWA has data to escalate. Future modules will cover maintenance, dues, and
           events.
         </p>

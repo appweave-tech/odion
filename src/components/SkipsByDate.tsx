@@ -12,13 +12,18 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function SkipsByDate({
   skips,
-  days = 30,
+  chartDays = 15,
+  pickerDays = 30,
 }: {
   skips: SkipEventWithVilla[];
-  days?: number;
+  // Recent-skips chip surface window (matches the chart).
+  chartDays?: number;
+  // Min date the "Browse other days" picker allows — the full fetched window.
+  pickerDays?: number;
 }) {
   const today = todayIST();
-  const minDate = daysAgoIST(days - 1);
+  const minDate = daysAgoIST(pickerDays - 1);
+  const chipCutoff = daysAgoIST(chartDays - 1);
   // ?date= arrives when the user taps a chart bar. Auto-opens the panel and
   // scrolls it into view so the drill-in feels like a single gesture.
   const searchParams = useSearchParams();
@@ -52,9 +57,16 @@ export function SkipsByDate({
     return m;
   }, [skips]);
 
+  // Only show recent-skip chips within the chart window so the chip surface
+  // matches the chart up top.
   const recentDates = React.useMemo(
-    () => Array.from(byDate.keys()).sort().reverse().slice(0, RECENT_DAYS_SHOWN),
-    [byDate],
+    () =>
+      Array.from(byDate.keys())
+        .filter((d) => d >= chipCutoff)
+        .sort()
+        .reverse()
+        .slice(0, RECENT_DAYS_SHOWN),
+    [byDate, chipCutoff],
   );
 
   const villas = byDate.get(date) ?? [];
@@ -113,7 +125,7 @@ export function SkipsByDate({
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <span className="grid gap-0.5">
               <span className="text-sm font-medium">Browse other days</span>
-              <span className="text-xs text-muted-foreground">Pick any date in the last 30 days</span>
+              <span className="text-xs text-muted-foreground">Pick any date in the last {pickerDays} days</span>
             </span>
           </span>
           {open ? (

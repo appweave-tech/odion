@@ -1,7 +1,7 @@
 # Odion · Community Ops
 
 Mobile-first web app for **Odion The Woods of East** (Bangalore gated villa community).
-First module: **Garbage Tracker** — residents log days the BBMP van skipped their villa, RWA gets data evidence.
+First module: **Garbage Pickup Tracker** — residents log days the BBMP van skipped their villa, RWA gets data evidence.
 
 Built by [Appweave](https://appweave.tech) as a community-visibility play. PRD lives in the Obsidian vault:
 `~/Appweave/obsidian-vault/30-Products/Odion-Garbage-Tracker/PRD.md`.

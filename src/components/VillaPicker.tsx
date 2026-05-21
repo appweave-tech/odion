@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { findOrCreateVilla, claimVilla, listVillas } from '@/lib/actions/villas';
-import { setVilla, setName, getName } from '@/lib/device';
+import { setVilla, setName, getName, getVilla } from '@/lib/device';
 import { toast } from 'sonner';
 import type { Villa } from '@/lib/types';
 import { TypeaheadStep } from './villa-picker/TypeaheadStep';
@@ -83,8 +83,15 @@ export function VillaPicker({
   const [villas, setVillas] = React.useState<Villa[] | null>(null);
   const [loadingVillas, setLoadingVillas] = React.useState(false);
 
-  // Restore in-flight draft on first mount.
+  // Restore in-flight draft on first mount — but only for residents who
+  // haven't yet claimed a villa. Resume-mid-flow exists to help first-time
+  // pickers who got interrupted, not returning residents using "Change
+  // villa" (who'd otherwise land on a stale Name step for some other villa).
   React.useEffect(() => {
+    if (getVilla()) {
+      clearDraft();
+      return;
+    }
     setDraft(loadDraft());
   }, []);
 
