@@ -1,7 +1,7 @@
 # Odion · Community Ops
 
 Mobile-first web app for **Odion The Woods of East** (Bangalore gated villa community).
-First module: **Garbage Tracker** — residents log days the BBMP van skipped their villa, RWA gets data evidence.
+First module: **Garbage Pickup Tracker** — residents log days the BBMP van skipped their villa, RWA gets data evidence.
 
 Built by [Appweave](https://appweave.tech) as a community-visibility play. PRD lives in the Obsidian vault:
 `~/Appweave/obsidian-vault/30-Products/Odion-Garbage-Tracker/PRD.md`.
@@ -31,17 +31,15 @@ npm run dev        # http://localhost:3010
 | Path | Purpose |
 | --- | --- |
 | `/` | Odion landing — module index |
-| `/garbage` | Pick villa / mark today skipped / past 7 days |
-| `/garbage/today` | Today's skip list + copy-WhatsApp message |
-| `/garbage/history` | 180-day heatmap + per-day skip feed |
-| `/garbage/villa/[label]` | Per-villa history (e.g. `/garbage/villa/P1-35`) |
+| `/garbage` | Pick villa / mark today skipped / past 3 days |
+| `/garbage/history` | 30-day bar chart + recent skip feed + date picker |
+| `/garbage/villa/[label]` | Per-villa 180-day heatmap + skip log |
 | `/garbage/settings` | Change villa, name, clear device |
 | `/garbage/admin` | Admin login (passcode) |
-| `/garbage/admin/villas` | Verify auto-created villas, delete |
+| `/garbage/admin/villas` | Verify auto-created villas, soft-delete, restore |
 | `/insights` | Public dashboard — auto-classified RWA-chat topics, live issues, heatmap |
 | `/insights/admin` | Upload WhatsApp export (`.zip` or `_chat.txt`), see ingest history |
 | `/about` | About + Appweave footer |
-| `/api/eod` | Daily 20:00 IST cron — returns digest JSON |
 
 ## Architecture notes
 
@@ -54,15 +52,15 @@ npm run dev        # http://localhost:3010
 ## Deployment
 
 1. Point DNS `odion.appweave.tech` → Vercel deployment.
-2. Set env vars in Vercel: `DATABASE_URL`, `DB_SCHEMA=odion`, `ADMIN_PASSCODE`, `CRON_SECRET`.
-3. Run `npm run migrate` once against production DATABASE_URL.
+2. Set env vars in Vercel: `DATABASE_URL`, `DB_SCHEMA=odion`, `ADMIN_PASSCODE`.
+3. Run `npm run migrate` once against production DATABASE_URL (script prompts before applying — pass `MIGRATE_CONFIRM=odion-prod` to skip the prompt in CI).
 4. Run `npm run seed` once.
-5. Cron is wired via `vercel.json` (20:00 IST = 14:30 UTC daily).
 
 ## Roadmap
 
-- **v1.1** — Twilio WhatsApp auto-post (swap into `/api/eod`).
-- **v1.2** — Phone OTP if abuse appears.
-- **v1.3** — Photo upload per skip event.
+- **v1.1** — `/garbage/today` page with copy-WhatsApp digest.
+- **v1.2** — Daily 20:00 IST cron (`/api/eod`) + Twilio WhatsApp auto-post; needs `CRON_SECRET` env.
+- **v1.3** — Phone OTP if abuse appears.
+- **v1.4** — Photo upload per skip event.
 - **v2** — Multi-community SaaS; Odion as reference customer.
 - New modules under `/maintenance`, `/dues`, `/events` — slot under the `odion` schema with their own table prefix.

@@ -38,7 +38,10 @@ export function GarbageNav() {
             <li key={t.href}>
               <Link
                 href={t.href}
-                prefetch
+                // Prefetching three routes on every load wasted bandwidth for
+                // residents who only use Home. Next still warms via hover/focus
+                // when prefetch={false}, so taps stay snappy.
+                prefetch={false}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={() => setOptimistic(t.href)}
                 className={cn(

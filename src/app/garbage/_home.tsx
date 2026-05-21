@@ -1,31 +1,68 @@
 'use client';
 
 import * as React from 'react';
-import { VillaGate } from '@/components/VillaGate';
+import { VillaPicker } from '@/components/VillaPicker';
 import { Button } from '@/components/ui/button';
 import { markSkip, unmarkSkip, getVillaSkipDates } from '@/lib/actions/skip';
 import { toast } from 'sonner';
-import { todayIST, formatISTDate, daysAgoIST, cn } from '@/lib/utils';
-import { Flag, Check, X } from 'lucide-react';
+import { todayIST, formatISTDate, daysAgoIST, cn, EDIT_WINDOW_DAYS } from '@/lib/utils';
+import { setVilla as cacheVilla } from '@/lib/device';
+import { Flag, Check, X, Home, Users } from 'lucide-react';
 import type { Villa } from '@/lib/types';
 
-type Phase = { phase: string; count: number };
-type Stats = { villas: number; skipsToday: number };
+type ClaimedVilla = { id: string; label: string } | null;
 
 export function GarbageHome({
-  phases,
-  allVillas,
-  stats,
+  claimedVilla,
+  villaCount,
 }: {
-  phases: Phase[];
-  allVillas: Villa[];
-  stats: Stats;
+  claimedVilla: ClaimedVilla;
+  villaCount: number;
 }) {
-  return (
-    <VillaGate phases={phases} allVillas={allVillas} stats={stats}>
-      {(villa) => <VillaView villaId={villa.id} villaLabel={villa.label} />}
-    </VillaGate>
-  );
+  // Source of truth is the server-resolved villa; the picker may add a new
+  // claim mid-session and update local state without a page reload.
+  const [villa, setVilla] = React.useState<ClaimedVilla>(claimedVilla);
+
+  function onPicked(v: Villa) {
+    setVilla({ id: v.id, label: v.label });
+    // Mirror to localStorage so Settings (which still reads from device.ts)
+    // sees the same villa without an extra round-trip.
+    cacheVilla(v.id, v.label);
+  }
+
+  if (!villa) {
+    return (
+      <div className="p-5 grid gap-4">
+        <div className="rounded-2xl bg-primary/5 border border-primary/20 p-5">
+          <Home className="size-6 text-primary mb-2" />
+          <h2 className="text-xl font-semibold">Welcome!</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            First time here — tell us which villa you live in. We'll remember on this device.
+          </p>
+          <div className="mt-4">
+            <VillaPicker
+              onPicked={onPicked}
+              trigger={
+                <Button size="lg" className="w-full">
+                  Pick my villa
+                </Button>
+              }
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-4">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+            <Users className="size-3.5" /> Neighbours
+          </div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{villaCount}</div>
+          <div className="text-xs text-muted-foreground">villas registered</div>
+        </div>
+      </div>
+    );
+  }
+
+  return <VillaView villaId={villa.id} villaLabel={villa.label} />;
 }
 
 function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: string }) {
@@ -81,7 +118,7 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
     });
   }
 
-  const days = Array.from({ length: 3 }, (_, i) => daysAgoIST(i));
+  const days = Array.from({ length: EDIT_WINDOW_DAYS }, (_, i) => daysAgoIST(i));
   const todaySkipped = skipped.has(today);
 
   return (
@@ -118,7 +155,7 @@ function VillaView({ villaId, villaLabel }: { villaId: string; villaLabel: strin
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-2">Past 3 days</h3>
+        <h3 className="text-sm font-medium text-muted-foreground mb-2">Past {EDIT_WINDOW_DAYS} days</h3>
         {loading ? (
           <div className="h-40 rounded-2xl bg-muted animate-pulse" />
         ) : (

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { adminVerifyVilla, adminDeleteVilla, adminRestoreVilla } from '@/lib/actions/admin';
 import type { Villa } from '@/lib/types';
 import { toast } from 'sonner';
@@ -13,6 +14,7 @@ type Filter = 'all' | 'pending' | 'verified' | 'deleted';
 export function AdminVillas({ villas }: { villas: Villa[] }) {
   const [pending, setPending] = React.useTransition();
   const [filter, setFilter] = React.useState<Filter>('all');
+  const confirm = useConfirm();
 
   const filtered = villas.filter((v) => {
     if (filter === 'all') return !v.deleted_at;
@@ -31,15 +33,25 @@ export function AdminVillas({ villas }: { villas: Villa[] }) {
       }
     });
   }
-  function del(id: string) {
-    if (!confirm('Soft-delete this villa? Its skip events stay; you can restore later.')) return;
-    setPending(async () => {
-      try {
-        await adminDeleteVilla(id);
-        toast.success('Deleted (soft)');
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed');
-      }
+  function del(id: string, label: string) {
+    confirm({
+      title: `Delete villa ${label}?`,
+      description: 'Its skip events stay on record. You can restore the villa later from the Deleted filter.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () =>
+        new Promise<void>((resolve) => {
+          setPending(async () => {
+            try {
+              await adminDeleteVilla(id);
+              toast.success('Deleted (soft)');
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'Failed');
+            } finally {
+              resolve();
+            }
+          });
+        }),
     });
   }
   function restore(id: string) {
@@ -112,7 +124,7 @@ export function AdminVillas({ villas }: { villas: Villa[] }) {
                   size="icon"
                   variant="ghost"
                   disabled={pending}
-                  onClick={() => del(v.id)}
+                  onClick={() => del(v.id, v.label)}
                   aria-label="Delete"
                 >
                   <Trash2 className="size-4 text-destructive" />

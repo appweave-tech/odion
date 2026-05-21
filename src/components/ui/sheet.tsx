@@ -27,8 +27,11 @@ SheetOverlay.displayName = 'SheetOverlay';
 
 export const SheetContent = React.forwardRef<
   React.ElementRef<typeof Dialog.Content>,
-  React.ComponentPropsWithoutRef<typeof Dialog.Content> & { title?: string }
->(({ className, children, title, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof Dialog.Content> & {
+    title?: string;
+    description?: string;
+  }
+>(({ className, children, title, description, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
     <Dialog.Content
@@ -46,13 +49,16 @@ export const SheetContent = React.forwardRef<
       {title ? (
         <div className="flex items-center justify-between px-5 pt-3 pb-2">
           <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
-          <SheetClose className="rounded-full p-2 hover:bg-accent">
+          <SheetClose className="rounded-full p-2 hover:bg-accent" aria-label="Close">
             <X className="size-5" />
           </SheetClose>
         </div>
       ) : null}
+      {/* Description is announced by screen readers but not visually shown
+          unless callers want it. Sheets without a meaningful description
+          still get a non-duplicate SR-only label. */}
       <Dialog.Description className="sr-only">
-        {title ?? 'Sheet content'}
+        {description ?? title ?? 'Sheet content'}
       </Dialog.Description>
       <div className="flex-1 overflow-y-auto px-5 pb-5">{children}</div>
     </Dialog.Content>

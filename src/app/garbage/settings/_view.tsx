@@ -5,13 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { VillaPicker } from '@/components/VillaPicker';
 import { getName, setName, getVilla, clearVilla } from '@/lib/device';
+import { unclaimDevice } from '@/lib/actions/villas';
 import { toast } from 'sonner';
 
-import type { Villa } from '@/lib/types';
-
-type Phase = { phase: string; count: number };
-
-export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas: Villa[] }) {
+export function SettingsView() {
   const [villa, setVillaState] = React.useState<{ id: string; label: string } | null>(null);
   const [name, setNameInput] = React.useState('');
   const [hydrated, setHydrated] = React.useState(false);
@@ -27,7 +24,17 @@ export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas
     toast.success('Name saved');
   }
 
-  function reset() {
+  async function reset() {
+    // Server side: null out devices.villa_id so the next /garbage visit
+    // resolves to the welcome screen, not the previous claim. Client side:
+    // wipe localStorage + state. Both must happen for "Clear" to be
+    // honest — otherwise localStorage clears but the server still
+    // resolves the old claim.
+    try {
+      await unclaimDevice();
+    } catch (e) {
+      console.error(e);
+    }
     clearVilla();
     setVillaState(null);
     toast.success('Cleared villa from this device');
@@ -49,8 +56,6 @@ export function SettingsView({ phases, allVillas }: { phases: Phase[]; allVillas
         </div>
         <div className="grid grid-cols-2 gap-2">
           <VillaPicker
-            phases={phases}
-            allVillas={allVillas}
             onPicked={(v) => setVillaState({ id: v.id, label: v.label })}
             trigger={<Button variant="outline">Change villa</Button>}
           />

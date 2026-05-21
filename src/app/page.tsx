@@ -41,7 +41,7 @@ export default function HomePage() {
         <ModuleCard
           href="/garbage"
           icon={<Trash2 className="size-6" />}
-          title="Garbage Tracker"
+          title="Garbage Pickup Tracker"
           subtitle="Log skipped collections, see history."
         />
         <ModuleCard
