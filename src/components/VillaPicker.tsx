@@ -1,27 +1,28 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { findOrCreateVilla, claimVilla, listPhases, listVillasInPhase } from '@/lib/actions/villas';
+import { findOrCreateVilla, claimVilla, listVillas } from '@/lib/actions/villas';
 import { setVilla, setName, getName } from '@/lib/device';
 import { toast } from 'sonner';
 import type { Villa } from '@/lib/types';
-import { PhaseStep } from './villa-picker/PhaseStep';
+import { TypeaheadStep } from './villa-picker/TypeaheadStep';
 import { CustomAddStep } from './villa-picker/CustomAddStep';
 import { NameStep } from './villa-picker/NameStep';
 
-type Phase = { phase: string; count: number };
-
 // sessionStorage key for in-flight picker draft. If a resident closes the
 // sheet mid-flow (notification, swipe, mistap) reopening picks up where
-// they left off rather than restarting from phase selection.
+// they left off rather than restarting.
 const DRAFT_KEY = 'odion:picker-draft';
+// History-push state marker: lets us tell our own pushState entry from any
+// other navigation when handling popstate to close the sheet.
+const HISTORY_MARKER = '__odion_picker_open';
 
 type Draft = {
   step: 'pick' | 'name';
   showFallback: boolean;
-  phase: string;
-  number: string;
+  query: string;
   newPhase: string;
   newNumber: string;
   pendingVilla: Villa | null;
@@ -30,8 +31,7 @@ type Draft = {
 const EMPTY_DRAFT: Draft = {
   step: 'pick',
   showFallback: false,
-  phase: '',
-  number: '',
+  query: '',
   newPhase: '',
   newNumber: '',
   pendingVilla: null,
@@ -72,17 +72,15 @@ export function VillaPicker({
   trigger: React.ReactNode;
   onPicked?: (v: Villa) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
   const [draft, setDraft] = React.useState<Draft>(EMPTY_DRAFT);
   const [name, setNameInput] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Lazily-fetched: the picker now owns its own data so /garbage doesn't
-  // need to ship the full villa list on first paint.
-  const [phases, setPhases] = React.useState<Phase[] | null>(null);
-  const [villasInPhase, setVillasInPhase] = React.useState<Villa[]>([]);
-  const [loadingPhases, setLoadingPhases] = React.useState(false);
+  // Full villa list — fetched once per session on first open. ~9KB once.
+  const [villas, setVillas] = React.useState<Villa[] | null>(null);
   const [loadingVillas, setLoadingVillas] = React.useState(false);
 
   // Restore in-flight draft on first mount.
@@ -96,38 +94,48 @@ export function VillaPicker({
     saveDraft(draft);
   }, [draft]);
 
-  // Fetch phases on first open.
+  // Fetch the villa list on first open.
   React.useEffect(() => {
-    if (!open || phases !== null) return;
-    setLoadingPhases(true);
-    listPhases()
-      .then((p) => setPhases(p))
-      .catch(() => toast.error('Could not load phases'))
-      .finally(() => setLoadingPhases(false));
-  }, [open, phases]);
+    if (!open || villas !== null) return;
+    setLoadingVillas(true);
+    listVillas()
+      .then((v) => setVillas(v))
+      .catch(() => toast.error('Could not load villas'))
+      .finally(() => setLoadingVillas(false));
+  }, [open, villas]);
 
-  // Fetch villas in the selected phase on change.
+  // History-push integration: when the sheet opens, push a marker entry so
+  // Android's system back gesture (and any browser back) pops the sheet
+  // instead of leaving the app. When closing via UI we step the history
+  // back so our pushed entry doesn't accumulate.
   React.useEffect(() => {
-    if (!draft.phase) {
-      setVillasInPhase([]);
+    if (!open) return;
+    const state = (window.history.state as Record<string, unknown> | null) ?? {};
+    if (!state[HISTORY_MARKER]) {
+      window.history.pushState({ ...state, [HISTORY_MARKER]: true }, '');
+    }
+    function onPop() {
+      // Any popstate while we're open = back button → close the sheet.
+      setOpen(false);
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [open]);
+
+  function handleOpenChange(next: boolean) {
+    if (!next && open) {
+      // Closing via UI (X / overlay / Escape). If our pushed history entry
+      // is still on top, step back so we don't leave a phantom entry behind.
+      const state = (window.history.state as Record<string, unknown> | null) ?? {};
+      if (state[HISTORY_MARKER]) {
+        window.history.back();
+      } else {
+        setOpen(false);
+      }
       return;
     }
-    let cancelled = false;
-    setLoadingVillas(true);
-    listVillasInPhase(draft.phase)
-      .then((v) => {
-        if (!cancelled) setVillasInPhase(v);
-      })
-      .catch(() => {
-        if (!cancelled) toast.error('Could not load villa numbers');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingVillas(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [draft.phase]);
+    setOpen(next);
+  }
 
   function patch(p: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -138,16 +146,7 @@ export function VillaPicker({
     clearDraft();
   }
 
-  function pickExisting() {
-    if (!draft.phase || !draft.number) {
-      toast.error('Pick phase and villa number');
-      return;
-    }
-    const v = villasInPhase.find((x) => String(x.number) === draft.number);
-    if (!v) {
-      toast.error('Villa not found in this phase');
-      return;
-    }
+  function selectVilla(v: Villa) {
     patch({ step: 'name', pendingVilla: v });
     setNameInput(getName());
   }
@@ -166,8 +165,7 @@ export function VillaPicker({
     setSubmitting(true);
     try {
       const villa = await findOrCreateVilla(p, n);
-      patch({ step: 'name', pendingVilla: villa });
-      setNameInput(getName());
+      selectVilla(villa);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not add villa';
       toast.error(msg);
@@ -186,8 +184,12 @@ export function VillaPicker({
       setName(name.trim());
       toast.success(`You're villa ${draft.pendingVilla.label}`);
       onPicked?.(draft.pendingVilla);
-      setOpen(false);
+      handleOpenChange(false);
       reset();
+      // Re-fetch the layout's villa chip and any other RSC that reads the
+      // device claim. The picker can be called from /garbage or /settings;
+      // both need their server tree refreshed so the chip appears.
+      router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not save villa';
       toast.error(msg);
@@ -209,30 +211,19 @@ export function VillaPicker({
       ? 'Optional display name shown next to skips you report.'
       : draft.showFallback
         ? 'Add a villa not in the list. Admin will verify it later.'
-        : 'Choose your phase and villa number.';
+        : 'Type your villa label to find it.';
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        // Don't wipe the draft on close — sessionStorage keeps it so a
-        // re-open resumes mid-flow. Only fully-successful claims call reset().
-      }}
-    >
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent title={title} description={description}>
         {draft.step === 'pick' && !draft.showFallback && (
-          <PhaseStep
-            phases={phases ?? []}
-            villasInPhase={villasInPhase}
-            phase={draft.phase}
-            number={draft.number}
-            loadingPhases={loadingPhases}
-            loadingVillas={loadingVillas}
-            onPhaseChange={(p) => patch({ phase: p, number: '' })}
-            onNumberChange={(n) => patch({ number: n })}
-            onContinue={pickExisting}
+          <TypeaheadStep
+            villas={villas ?? []}
+            loading={loadingVillas}
+            query={draft.query}
+            onQueryChange={(q) => patch({ query: q })}
+            onSelect={selectVilla}
             onOpenFallback={() => patch({ showFallback: true })}
           />
         )}

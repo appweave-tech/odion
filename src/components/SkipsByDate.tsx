@@ -2,11 +2,13 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronDown, ChevronRight, Flag } from 'lucide-react';
 import { cn, daysAgoIST, formatISTDate, todayIST } from '@/lib/utils';
 import type { SkipEventWithVilla } from '@/lib/types';
 
 const RECENT_DAYS_SHOWN = 2;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function SkipsByDate({
   skips,
@@ -17,8 +19,24 @@ export function SkipsByDate({
 }) {
   const today = todayIST();
   const minDate = daysAgoIST(days - 1);
-  const [open, setOpen] = React.useState(false);
-  const [date, setDate] = React.useState(today);
+  // ?date= arrives when the user taps a chart bar. Auto-opens the panel and
+  // scrolls it into view so the drill-in feels like a single gesture.
+  const searchParams = useSearchParams();
+  const urlDate = searchParams.get('date');
+  const initialDate = urlDate && DATE_RE.test(urlDate) ? urlDate : today;
+  const [open, setOpen] = React.useState(!!urlDate);
+  const [date, setDate] = React.useState(initialDate);
+  const rootRef = React.useRef<HTMLElement>(null);
+
+  React.useEffect(() => {
+    if (!urlDate || !DATE_RE.test(urlDate)) return;
+    setDate(urlDate);
+    setOpen(true);
+    // Defer scroll so the panel has expanded before we measure.
+    requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [urlDate]);
 
   const byDate = React.useMemo(() => {
     const m = new Map<string, SkipEventWithVilla[]>();
@@ -80,7 +98,11 @@ export function SkipsByDate({
         </section>
       )}
 
-      <section className="rounded-2xl border bg-card">
+      <section
+        id="skip-by-date"
+        ref={rootRef}
+        className="rounded-2xl border bg-card scroll-mt-20"
+      >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
