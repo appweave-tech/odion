@@ -197,5 +197,8 @@ export async function claimVilla(
           last_ip = EXCLUDED.last_ip,
           last_seen = now()
   `;
-  revalidatePath('/garbage');
+  // 'layout' invalidates the layout segment too — the header chip
+  // (getClaimedVilla in garbage/layout's GarbageHeader) is otherwise served
+  // from the cached layout render and stays empty until a hard reload.
+  revalidatePath('/garbage', 'layout');
 }
