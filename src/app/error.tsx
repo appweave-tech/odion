@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { logError } from '@/lib/log-error';
 
 export default function RootError({
   error,
@@ -12,6 +13,13 @@ export default function RootError({
 }) {
   React.useEffect(() => {
     console.error('[odion:error]', error);
+    logError({
+      kind: 'rsc.boundary',
+      message: error.message || 'root error boundary',
+      digest: error.digest,
+      stack: error.stack,
+      ctx: { boundary: 'root' },
+    });
   }, [error]);
 
   return (

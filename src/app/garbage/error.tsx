@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { logError } from '@/lib/log-error';
 
 export default function GarbageError({
   error,
@@ -12,6 +13,13 @@ export default function GarbageError({
 }) {
   React.useEffect(() => {
     console.error('[odion:garbage:error]', error);
+    logError({
+      kind: 'rsc.boundary',
+      message: error.message || 'garbage error boundary',
+      digest: error.digest,
+      stack: error.stack,
+      ctx: { boundary: 'garbage' },
+    });
   }, [error]);
 
   return (

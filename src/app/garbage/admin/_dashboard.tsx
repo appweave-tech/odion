@@ -30,7 +30,7 @@ export function AdminDashboard({
       </div>
       <Link href="/garbage/admin/villas" className="rounded-2xl border bg-card p-5 min-h-tap active:bg-accent">
         <div className="font-medium">Manage villas</div>
-        <div className="text-sm text-muted-foreground">Verify, merge, delete villas</div>
+        <div className="text-sm text-muted-foreground">Verify auto-created villas, delete or restore</div>
       </Link>
     </div>
   );

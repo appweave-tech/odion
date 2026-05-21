@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
+import { ErrorReporter } from '@/components/ErrorReporter';
 import './globals.css';
 
 // Plus Jakarta Sans — humanist, friendly, distinctive without being weird.
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ConfirmProvider>
           <div className="min-h-dvh flex flex-col">{children}</div>
         </ConfirmProvider>
+        <ErrorReporter />
         {/* bottom-center keeps confirmations close to the tap target on mobile.
             offset lifts toasts above the 96px-tall sticky bottom nav. */}
         <Toaster
