@@ -11,8 +11,9 @@ export const revalidate = 60;
 
 const LABEL_RE = /^[A-Z0-9]{1,8}-\d{1,4}$/;
 
-export default async function VillaPage({ params }: { params: { label: string } }) {
-  const label = decodeURIComponent(params.label);
+export default async function VillaPage({ params }: { params: Promise<{ label: string }> }) {
+  const { label: rawLabel } = await params;
+  const label = decodeURIComponent(rawLabel);
   if (label.length > 16 || !LABEL_RE.test(label)) notFound();
   const [villa] = await sql()<Villa[]>`
     SELECT id, phase, number, label, display_order, auto_created, verified, created_at

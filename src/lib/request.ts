@@ -1,8 +1,8 @@
 import 'server-only';
 import { headers } from 'next/headers';
 
-export function getClientMeta(): { ip: string | null; ua: string | null } {
-  const h = headers();
+export async function getClientMeta(): Promise<{ ip: string | null; ua: string | null }> {
+  const h = await headers();
   const ip =
     h.get('x-forwarded-for')?.split(',')[0].trim() ||
     h.get('x-real-ip') ||
