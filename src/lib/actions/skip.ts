@@ -13,8 +13,8 @@ import { getClientMeta } from '@/lib/request';
 import { todayIST, daysAgoIST, EDIT_WINDOW_DAYS } from '@/lib/utils';
 import type { SkipEventWithVilla } from '@/lib/types';
 
-function requireDeviceCookie(): string {
-  const id = cookies().get('odion-device')?.value;
+async function requireDeviceCookie(): Promise<string> {
+  const id = (await cookies()).get('odion-device')?.value;
   if (!id) throw new Error('Device cookie missing — reload the page');
   return id;
 }
@@ -56,7 +56,7 @@ export async function markSkip(input: {
   note?: string;
 }) {
   const { villaId } = input;
-  const deviceId = requireDeviceCookie();
+  const deviceId = await requireDeviceCookie();
   const date = input.date ?? todayIST();
   if (!villaId) throw new Error('villaId required');
   if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
@@ -65,7 +65,7 @@ export async function markSkip(input: {
   await assertSkipRateLimit(deviceId);
   await assertDeviceOwnsVilla(deviceId, villaId);
 
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
 
   try {
     await sql().begin(async (tx) => {
@@ -116,7 +116,7 @@ export async function markSkip(input: {
 
 export async function unmarkSkip(input: { villaId: string; date: string }) {
   const { villaId, date } = input;
-  const deviceId = requireDeviceCookie();
+  const deviceId = await requireDeviceCookie();
   if (!villaId || !date) throw new Error('villaId, date required');
   if (date < daysAgoIST(EDIT_WINDOW_DAYS) || date > todayIST()) {
     throw new Error('Edit window exceeded — ask admin');
@@ -131,7 +131,7 @@ export async function unmarkSkip(input: { villaId: string; date: string }) {
   `;
   if (existing.length === 0) return;
 
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql()`
     INSERT INTO odion.garbage_skip_events
       (villa_id, skip_date, reported_by_device, supersedes_event_id, void, ip_address, user_agent)

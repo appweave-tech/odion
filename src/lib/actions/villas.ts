@@ -79,7 +79,7 @@ export async function getVillaCount(): Promise<number> {
 // /garbage to render the villa view server-side instead of waiting for a
 // client-side localStorage hydration round-trip.
 export async function getClaimedVilla(): Promise<{ id: string; label: string } | null> {
-  const deviceId = cookies().get('odion-device')?.value;
+  const deviceId = (await cookies()).get('odion-device')?.value;
   if (!deviceId) return null;
   const rows = await sql()<{ id: string; label: string }[]>`
     SELECT v.id, v.label
@@ -150,7 +150,7 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
   }
 
   // Rate limit per device — protects the pending-villa queue from spam.
-  const deviceId = cookies().get('odion-device')?.value || null;
+  const deviceId = (await cookies()).get('odion-device')?.value || null;
   if (deviceId) {
     const [row] = await sql()<{ recent: string }[]>`
       SELECT COUNT(*)::text AS recent
@@ -166,7 +166,7 @@ export async function findOrCreateVilla(phaseRaw: string, numberRaw: number): Pr
     }
   }
 
-  const { ip } = getClientMeta();
+  const { ip } = await getClientMeta();
   const inserted = await sql()<Villa[]>`
     INSERT INTO odion.villas (phase, number, auto_created, verified, created_by_ip, created_by_device)
     VALUES (${phase}, ${number}, true, false, ${ip}, ${deviceId})
@@ -184,9 +184,9 @@ export async function claimVilla(
 ) {
   if (!villaId) throw new Error('villaId required');
   // Device identity comes from the httpOnly cookie set by middleware — client can't forge it.
-  const deviceId = cookies().get('odion-device')?.value;
+  const deviceId = (await cookies()).get('odion-device')?.value;
   if (!deviceId) throw new Error('Device cookie missing — reload the page');
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql()`
     INSERT INTO odion.devices (id, villa_id, name, phone, user_agent, last_ip, first_seen, last_seen)
     VALUES (${deviceId}, ${villaId}, ${opts.name ?? null}, ${opts.phone ?? null}, ${ua}, ${ip}, now(), now())
@@ -207,7 +207,7 @@ export async function claimVilla(
 // device.ts. Without this, Settings → Clear only wipes localStorage and the
 // server still resolves the old claim on the next /garbage visit.
 export async function unclaimDevice() {
-  const deviceId = cookies().get('odion-device')?.value;
+  const deviceId = (await cookies()).get('odion-device')?.value;
   if (!deviceId) return;
   await sql()`
     UPDATE odion.devices

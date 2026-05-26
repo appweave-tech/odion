@@ -13,7 +13,7 @@ const ADMIN_COOKIE = 'odion-admin';
 // connections or relying on external state. The 22-char passcode is already
 // brute-resistant; this is belt-and-braces + a forensic console line.
 async function rejectAfterDelay(reason: string): Promise<false> {
-  const { ip } = getClientMeta();
+  const { ip } = await getClientMeta();
   console.warn(`[admin] login rejected (${reason}) from ip=${ip ?? 'unknown'}`);
   await new Promise((r) => setTimeout(r, 1000));
   return false;
@@ -26,7 +26,7 @@ export async function adminLogin(passcode: string): Promise<boolean> {
   const b = Buffer.from(expected, 'utf8');
   if (a.length !== b.length) return rejectAfterDelay('length-mismatch');
   if (!crypto.timingSafeEqual(a, b)) return rejectAfterDelay('hmac-mismatch');
-  cookies().set(ADMIN_COOKIE, signSession(), {
+  (await cookies()).set(ADMIN_COOKIE, signSession(), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -39,12 +39,12 @@ export async function adminLogin(passcode: string): Promise<boolean> {
 }
 
 export async function adminLogout() {
-  cookies().delete(ADMIN_COOKIE);
+  (await cookies()).delete(ADMIN_COOKIE);
   revalidatePath('/garbage/admin');
 }
 
 export async function isAdmin(): Promise<boolean> {
-  return verifySession(cookies().get(ADMIN_COOKIE)?.value);
+  return verifySession((await cookies()).get(ADMIN_COOKIE)?.value);
 }
 
 export async function requireAdmin() {
@@ -53,7 +53,7 @@ export async function requireAdmin() {
 
 export async function adminVerifyVilla(villaId: string) {
   await requireAdmin();
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql().begin(async (tx) => {
     await tx`UPDATE odion.villas SET verified = true WHERE id = ${villaId}`;
     await tx`
@@ -69,7 +69,7 @@ export async function adminVerifyVilla(villaId: string) {
 // Restore via adminRestoreVilla.
 export async function adminDeleteVilla(villaId: string) {
   await requireAdmin();
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql().begin(async (tx) => {
     await tx`UPDATE odion.villas SET deleted_at = now() WHERE id = ${villaId}`;
     await tx`
@@ -83,7 +83,7 @@ export async function adminDeleteVilla(villaId: string) {
 
 export async function adminRestoreVilla(villaId: string) {
   await requireAdmin();
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql().begin(async (tx) => {
     await tx`UPDATE odion.villas SET deleted_at = NULL WHERE id = ${villaId}`;
     await tx`
@@ -97,7 +97,7 @@ export async function adminRestoreVilla(villaId: string) {
 
 export async function adminVoidEvent(eventId: string, note?: string) {
   await requireAdmin();
-  const { ip, ua } = getClientMeta();
+  const { ip, ua } = await getClientMeta();
   await sql().begin(async (tx) => {
     const row = await tx<{ villa_id: string; skip_date: string }[]>`
       SELECT villa_id, skip_date FROM odion.garbage_skip_events WHERE id = ${eventId} LIMIT 1
